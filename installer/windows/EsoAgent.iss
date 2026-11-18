@@ -103,10 +103,11 @@ end;
 function InitializeSetup(): Boolean;
 var
   FreeMB: Cardinal;
+  TotalMB: Cardinal;
   Existing: string;
 begin
   Result := True;
-  if not GetSpaceOnDisk(ExpandConstant('{autopf}'), True, FreeMB, nil, nil) then
+  if not GetSpaceOnDisk(ExpandConstant('{autopf}'), True, FreeMB, TotalMB) then
     FreeMB := 0;
   if FreeMB < 900 then
   begin
