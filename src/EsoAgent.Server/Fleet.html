@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%20%20%20%3C%21--%20EsoAgent%20golden%20wing%20%E2%80%94%20owner%20pick%202026-11-18.%20Generated%20by%20scripts%2Frender-brand.py%3B%20edit%20geometry%20there.%20--%3E%20%20%20%3Cdefs%3E%3ClinearGradient%20id%3D%22gold%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23F7DC8F%22%2F%3E%3Cstop%20offset%3D%220.45%22%20stop-color%3D%22%23E9BE57%22%2F%3E%3Cstop%20offset%3D%220.75%22%20stop-color%3D%22%23C9962E%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%239A7418%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%20%20%20%3Cg%20fill%3D%22url%28%23gold%29%22%3E%20%20%20%3Cpolygon%20points%3D%2220%2C52%2068%2C26%2058%2C36%2029%2C50%22%2F%3E%20%20%20%3Cpolygon%20points%3D%2228%2C54%2064%2C36%2054%2C48%2034%2C57%22%2F%3E%20%20%20%3Cpolygon%20points%3D%2235%2C59%2054%2C49%2048%2C60%2037%2C66%22%2F%3E%20%20%20%3Cpolygon%20points%3D%2236%2C67%2051%2C62%2046%2C69%2036%2C72%22%2F%3E%20%20%20%3Cpolygon%20points%3D%2221%2C54%2038%2C60%2034%2C79%22%2F%3E%20%20%20%3C%2Fg%3E%20%20%20%3Cg%20stroke%3D%22url%28%23gold%29%22%3E%20%20%20%3Cpath%20d%3D%22M%2056.4%2C41.0%20A%2013%2C13%200%200%201%2056.4%2C61.0%22%20fill%3D%22none%22%20stroke-width%3D%225.0%22%20stroke-linecap%3D%22round%22%2F%3E%20%20%20%3Cpath%20d%3D%22M%2062.8%2C33.4%20A%2023%2C23%200%200%201%2062.8%2C68.6%22%20fill%3D%22none%22%20stroke-width%3D%225.0%22%20stroke-linecap%3D%22round%22%2F%3E%20%20%20%3Cpath%20d%3D%22M%2069.2%2C25.7%20A%2033%2C33%200%200%201%2069.2%2C76.3%22%20fill%3D%22none%22%20stroke-width%3D%225.0%22%20stroke-linecap%3D%22round%22%2F%3E%20%20%20%3C%2Fg%3E%20%3C%2Fsvg%3E%20">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EsoAgent Fleet — Owner Panel</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3; --mut:#8b949e; --acc:#E3B341; --bad:#f85149; --ok:#3fb950; --warn:#d29922; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); margin: 0; }
+  header { display:flex; align-items:center; gap:1rem; padding:.7rem 1rem; background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:1.05rem; margin:0; }
+  header form { margin-left:auto; }
+  nav { display:flex; flex-wrap:wrap; gap:.4rem; padding:.6rem 1rem; border-bottom:1px solid var(--line); }
+  nav button { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:.45rem .8rem; cursor:pointer; }
+  nav button.active { border-color:var(--acc); color:var(--acc); }
+  main { padding:1rem; max-width:1150px; margin:0 auto; }
+  section { display:none; } section.active { display:block; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  th, td { text-align:left; padding:.45rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; }
+  button.act { background:#21262d; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:.3rem .6rem; cursor:pointer; }
+  button.act:hover { border-color:var(--acc); }
+  button.danger:hover { border-color:var(--bad); color:var(--bad); }
+  button.primary { background:#E3B341; border-color:#E3B341; color:#141414; font-weight:600; }
+  input, select, textarea { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:.5rem; font:inherit; }
+  textarea { width:100%; min-height:80px; font-family:ui-monospace, monospace; }
+  pre.out { background:#010409; border:1px solid var(--line); border-radius:8px; padding:.8rem; white-space:pre-wrap; word-break:break-word; max-height:55vh; overflow:auto; font-size:.85rem; }
+  .row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:.7rem; }
+  .mut { color:var(--mut); } .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .badge { border:1px solid var(--line); border-radius:999px; padding:.05rem .5rem; font-size:.8rem; }
+  .badge.on { border-color:var(--ok); color:var(--ok); }
+  .badge.pend { border-color:var(--warn); color:var(--warn); }
+  .badge.rej { border-color:var(--bad); color:var(--bad); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.8rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem; }
+  .card h3 { margin:.1rem 0 .5rem; font-size:.85rem; color:var(--mut); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .card .big { font-size:1.25rem; font-weight:700; }
+  .card .small { color:var(--mut); font-size:.85rem; }
+  code { font-family:ui-monospace, monospace; word-break:break-all; }
+  .banner { border:1px solid var(--bad); background:#3d1d1d; border-radius:8px; padding:.7rem .9rem; margin-bottom:.8rem; }
+  :focus-visible { outline:2px solid var(--acc); outline-offset:1px; }
+  button, input, select, textarea { transition:border-color .15s ease, background .15s ease; }
+  .brandmark { display:inline-flex; border-radius:8px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.45); }
+  header h1 { letter-spacing:.01em; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brandmark"><svg width="30" height="30" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">      <defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F7DC8F"/><stop offset="0.45" stop-color="#E9BE57"/><stop offset="0.75" stop-color="#C9962E"/><stop offset="1" stop-color="#9A7418"/></linearGradient></defs>   <g fill="url(#gold)">   <polygon points="20,52 68,26 58,36 29,50"/>   <polygon points="28,54 64,36 54,48 34,57"/>   <polygon points="35,59 54,49 48,60 37,66"/>   <polygon points="36,67 51,62 46,69 36,72"/>   <polygon points="21,54 38,60 34,79"/>   </g>   <g stroke="url(#gold)">   <path d="M 56.4,41.0 A 13,13 0 0 1 56.4,61.0" fill="none" stroke-width="5.0" stroke-linecap="round"/>   <path d="M 62.8,33.4 A 23,23 0 0 1 62.8,68.6" fill="none" stroke-width="5.0" stroke-linecap="round"/>   <path d="M 69.2,25.7 A 33,33 0 0 1 69.2,76.3" fill="none" stroke-width="5.0" stroke-linecap="round"/>   </g> </svg></span><h1 data-i18n="fleetTitle">EsoAgent Fleet</h1>
+  <span class="mut" id="hdrInfo"></span>
+  <span class="badge" id="hdrAlerts" style="display:none;border-color:var(--warn);color:var(--warn)"></span>
+  <button class="act" id="langToggle" style="margin-left:auto">العربية</button>
+  <form method="post" action="/panel/logout" style="margin-left:0"><button class="act" type="submit" data-i18n="signOut">Sign out</button></form>
+</header>
+<nav id="tabs">
+  <button data-tab="devices" class="active" data-i18n="devices">Devices</button>
+  <button data-tab="console" data-i18n="console">Device console</button>
+  <button data-tab="activity" data-i18n="activity">Activity</button>
+  <button data-tab="scripts" data-i18n="scripts">Scripts</button>
+  <button data-tab="mesh" data-i18n="mesh">Mesh</button>
+  <button data-tab="audit" data-i18n="audit">Fleet audit</button>
+  <button data-tab="access" data-i18n="access">Access</button>
+</nav>
+<main>
+  <section id="tab-devices" class="active">
+    <div class="row"><button class="act" id="devRefresh">Refresh</button><span class="mut">Pending devices appear here automatically when an agent first connects. Nothing can control a device until you approve it.</span></div>
+    <table><thead><tr><th>Code</th><th>Name</th><th>OS</th><th>IPs</th><th>State</th><th>Groups</th><th>Last seen</th><th></th></tr></thead><tbody id="devBody"></tbody></table>
+  </section>
+
+  <section id="tab-console">
+    <div class="row">
+      <select id="conDevice"></select>
+      <select id="conShell"><option value="default">Default shell</option><option value="powershell">PowerShell</option><option value="bash">bash</option><option value="sh">sh</option><option value="cmd">cmd.exe</option></select>
+      <button class="act primary" id="conRun">Run</button>
+      <button class="act" data-quick="/api/status">Status</button>
+      <button class="act" data-quick="/api/software">Software</button>
+      <button class="act" data-quick="/api/services">Services</button>
+      <button class="act" data-quick="/api/processes">Processes</button>
+    </div>
+    <textarea id="conScript" placeholder="Command to run on the selected device (panel-signed, fully audited)…"></textarea>
+    <pre class="out" id="conOut" style="display:none"></pre>
+    <p class="mut">Full device dashboard (when you're on the same tailnet): <code id="conDirect"></code></p>
+  </section>
+
+  <section id="tab-mesh">
+    <div class="row"><button class="act" id="meshRefresh">Refresh</button><span class="mut" id="meshInfo">WireGuard mesh · range 10.77.0.0/16 · devices are reachable by name (MagicDNS-lite hosts sync)</span></div>
+    <table><thead><tr><th>Device</th><th>Virtual IP</th><th>WireGuard key</th><th>Advertised subnets</th><th>Approved subnets</th><th></th></tr></thead><tbody id="meshBody"></tbody></table>
+    <div class="cards">
+      <div class="card"><h3>ACL rules</h3>
+        <p class="small">One rule per line: <code>from -> to [ports]</code> — from/to are device codes or <code>group:name</code>; ports comma-separated, empty = all. Default posture: fleet members can reach each other's agent port (8737); everything else is denied at the device firewall.</p>
+        <textarea id="aclText" style="min-height:90px" placeholder="group:servers -> ABCD-1234 22,3389"></textarea>
+        <div class="row"><button class="act primary" id="aclSave">Save ACL rules</button></div>
+        <p class="small" id="aclMsg"></p></div>
+      <div class="card"><h3>Mesh exit node</h3>
+        <p class="small">One device can be the fleet's exit node: devices that opt in (agent config <code>mesh.useExitNode</code>) route all their traffic through it. The exit node forwards + NATs on Linux; on Windows, NAT is a manual step (see USER-GUIDE).</p>
+        <div class="row"><select id="exitSel" style="flex:1"></select></div>
+        <div class="row"><button class="act primary" id="exitSet">Set exit node</button><button class="act" id="exitClear">Clear</button></div>
+        <p class="small" id="exitMsg"></p></div>
+      <div class="card"><h3>Enrollment keys</h3>
+        <p class="small">Pre-approval keys for unattended installs. A device presenting a valid key at enrollment is approved automatically. The key is shown ONCE at creation; only its hash is stored.</p>
+        <div class="row"><input id="ekUses" type="number" min="1" placeholder="Uses (blank = unlimited)" style="width:11rem"><input id="ekNote" placeholder="Note" style="flex:1"></div>
+        <div class="row"><button class="act primary" id="ekCreate">Create key</button></div>
+        <p class="small" id="ekNew"></p>
+        <table><thead><tr><th>Id</th><th>Uses left</th><th>Created by</th><th>Note</th><th></th></tr></thead><tbody id="ekBody"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-audit">
+    <div class="row"><button class="act" id="auditRefresh">Refresh</button></div>
+    <pre class="out" id="auditOut"></pre>
+  </section>
+
+  <section id="tab-activity">
+    <div class="row">
+      <input id="actDevice" placeholder="Device code (blank = all)" style="width:12rem">
+      <select id="actSource"><option value="">All sources</option><option value="device">device</option><option value="server">server</option><option value="operator">operator</option><option value="owner">owner</option><option value="alert">alerts only</option></select>
+      <input id="actSince" type="datetime-local" title="Since">
+      <button class="act" id="actRefresh" data-i18n="refresh">Refresh</button>
+      <a class="act" id="actExportJson" href="#" style="text-decoration:none;padding:.3rem .6rem;border:1px solid var(--line);border-radius:6px;color:var(--txt)">Export JSON</a>
+      <a class="act" id="actExportCsv" href="#" style="text-decoration:none;padding:.3rem .6rem;border:1px solid var(--line);border-radius:6px;color:var(--txt)">Export CSV</a>
+    </div>
+    <pre class="out" id="actOut"></pre>
+  </section>
+
+  <section id="tab-scripts">
+    <div class="cards" style="margin-bottom:.8rem">
+      <div class="card"><h3 data-i18n="addScript">Add / edit script</h3>
+        <div class="row"><input id="scName" placeholder="Name" style="flex:1"><select id="scShell"><option value="default">Default shell</option><option value="powershell">PowerShell</option><option value="bash">bash</option><option value="sh">sh</option><option value="cmd">cmd.exe</option></select></div>
+        <textarea id="scBody" placeholder="Script body…"></textarea>
+        <div class="row"><button class="act primary" id="scSave" data-i18n="save">Save script</button><span class="small" id="scMsg"></span></div>
+      </div>
+      <div class="card"><h3 data-i18n="runScript">Run a script</h3>
+        <p class="small">Pick a saved script, choose target device codes (comma-separated), run. The run is audit-logged with the script body's SHA-256 and who ran it.</p>
+        <div class="row"><select id="scPick" style="flex:1"></select></div>
+        <div class="row"><input id="scTargets" placeholder="Codes, e.g. ABCD-1234, EFGH-5678" style="flex:1"></div>
+        <div class="row"><button class="act primary" id="scRun">Run</button></div>
+        <pre class="out" id="scOut" style="display:none;max-height:35vh"></pre>
+      </div>
+    </div>
+    <table><thead><tr><th>Name</th><th>Shell</th><th>By</th><th>Updated</th><th></th></tr></thead><tbody id="scBody2"></tbody></table>
+  </section>
+
+  <section id="tab-device">
+    <div class="row">
+      <button class="act" id="dvBack" data-i18n="back">← All devices</button>
+      <h2 id="dvTitle" style="margin:0;font-size:1.1rem"></h2>
+      <span class="mut" id="dvHealth"></span>
+    </div>
+    <div class="row">
+      <button class="act dv-sub active" data-sub="status" data-i18n="status">Status</button>
+      <button class="act dv-sub" data-sub="desktop" data-i18n="desktop">Desktop</button>
+      <button class="act dv-sub" data-sub="files" data-i18n="files">Files</button>
+      <button class="act dv-sub" data-sub="activity" data-i18n="activity">Activity</button>
+    </div>
+
+    <div id="dv-status">
+      <div class="row">
+        <button class="act" data-dvquick="/api/status">Status</button>
+        <button class="act" data-dvquick="/api/doctor">Doctor</button>
+        <button class="act" data-dvquick="/api/diagnose">Diagnose</button>
+        <button class="act" data-dvquick="/api/inventory">Inventory</button>
+        <button class="act" data-dvquick="/api/patch">Patch check</button>
+      </div>
+      <pre class="out" id="dvStatusOut"></pre>
+    </div>
+
+    <div id="dv-desktop" style="display:none">
+      <div class="row">
+        <select id="fdMode"><option value="View">View only</option><option value="Control" selected>Control</option></select>
+        <select id="fdQuality"><option value="40">Quality: low</option><option value="60" selected>Quality: balanced</option><option value="85">Quality: high</option></select>
+        <select id="fdMonitor"></select>
+        <label class="small"><input type="checkbox" id="fdRecord"> Record session</label>
+        <button class="act primary" id="fdStart">Start session</button>
+        <button class="act danger" id="fdStop" disabled>Stop</button>
+        <button class="act" id="fdPrivacy" disabled>Privacy: off</button>
+        <span class="mut" id="fdState">Relayed through this panel — the device verifies the panel's signature itself.</span>
+      </div>
+      <canvas id="fdCanvas" width="960" height="540" tabindex="0" style="width:100%;background:#000;border:1px solid var(--line);border-radius:8px;outline:none"></canvas>
+      <div class="row" style="margin-top:.5rem">
+        <input id="fdChatIn" placeholder="Message the person at the device…" style="flex:1">
+        <button class="act" id="fdChatSend" disabled>Send chat</button>
+      </div>
+      <pre class="out" id="fdChatLog" style="display:none;max-height:18vh"></pre>
+    </div>
+
+    <div id="dv-files" style="display:none">
+      <div class="row">
+        <input id="dvFilePath" style="flex:1;min-width:220px" placeholder="Directory path">
+        <button class="act" id="dvFileGo">Open</button>
+        <button class="act" id="dvFileUp">↑ Parent</button>
+        <label class="act" style="cursor:pointer">Upload here <input type="file" id="dvFileUpload" style="display:none"></label>
+      </div>
+      <div class="mut" id="dvFileMsg"></div>
+      <table><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="dvFileBody"></tbody></table>
+    </div>
+
+    <div id="dv-activity" style="display:none">
+      <div class="row"><button class="act" id="dvActRefresh" data-i18n="refresh">Refresh</button></div>
+      <pre class="out" id="dvActOut"></pre>
+    </div>
+  </section>
+
+  <section id="tab-access">
+    <div id="accBanner"></div>
+    <div class="cards">
+      <div class="card"><h3>Operator access</h3><div class="big" id="accOpState">…</div>
+        <p class="small">Owner-reserved. Revoking cuts the operator's access everywhere: the server refuses its calls and every approved device drops its key. You keep full control from this panel.</p>
+        <div class="row"><button class="act danger" id="accRevoke">Revoke operator</button><button class="act" id="accRestore">Restore</button></div></div>
+      <div class="card"><h3>Rotate operator key</h3>
+        <p class="small">Owner-reserved. Paste the NEW operator public key (from <code>eso keygen</code>). Devices are told to trust the new key and drop the old one; the old key dies on the server immediately.</p>
+        <textarea id="accNewKey" placeholder="Base64 SPKI public key" style="min-height:56px"></textarea>
+        <div class="row"><button class="act danger" id="accRotateKey">Rotate operator key</button></div>
+        <p class="small" id="accRotateMsg"></p></div>
+      <div class="card"><h3>Owner password</h3>
+        <p class="small">Owner-reserved: only you, here, can change it.</p>
+        <div class="row"><input type="password" id="pwCurrent" placeholder="Current password"></div>
+        <div class="row"><input type="password" id="pwNew" placeholder="New password (min 8 chars)"></div>
+        <button class="act" id="accChangePw">Change password</button>
+        <p class="small" id="pwMsg"></p></div>
+      <div class="card"><h3>Two-factor auth (TOTP)</h3><div class="big" id="accTotpState">…</div>
+        <p class="small">Owner-only. When enabled, panel sign-in needs a 6-digit code from your authenticator app as a second step.</p>
+        <div class="row"><button class="act" id="accTotpBegin">Set up 2FA</button></div>
+        <div id="accTotpBox" style="display:none">
+          <p class="small">Add this secret to your authenticator app, then enter the current code to confirm:</p>
+          <p><code id="accTotpSecret"></code></p>
+          <div class="row"><input id="accTotpCode" placeholder="6-digit code" style="width:9rem"><button class="act primary" id="accTotpConfirm">Confirm</button></div>
+        </div>
+        <div class="row"><input type="password" id="accTotpPw" placeholder="Password (to disable)"><button class="act danger" id="accTotpDisable">Disable 2FA</button></div>
+        <p class="small" id="accTotpMsg"></p></div>
+      <div class="card"><h3>Alert webhook</h3>
+        <p class="small">Alerts (offline devices, low disk, failed logins…) are also POSTed as signed JSON to this URL. Header <code>X-Eso-Signature</code> = HMAC-SHA256 of the body with the secret (shown once when first generated).</p>
+        <div class="row"><input id="accWebhookUrl" placeholder="https://example.com/eso-alerts" style="flex:1"></div>
+        <div class="row"><button class="act" id="accWebhookSave">Save webhook</button><span class="small" id="accWebhookState"></span></div>
+        <p class="small" id="accWebhookMsg"></p></div>
+      <div class="card"><h3>Access codes (hand a device to someone)</h3>
+        <p class="small">Mint a short code for ONE device. Whoever holds it redeems it for a signed, scoped, expiring grant — no account, no password sharing. Grants never include owner powers. The code is shown ONCE.</p>
+        <div class="row"><input id="acDevice" placeholder="Device code (e.g. XXXX-XXXX)" style="width:11rem"><input id="acMinutes" type="number" value="60" min="1" style="width:6rem"><span class="small">minutes</span><input id="acUses" type="number" placeholder="uses ∞" min="1" style="width:6rem"></div>
+        <div class="row small">
+          <label><input type="checkbox" id="acExec" checked> exec</label>
+          <label><input type="checkbox" id="acFiles" checked> files</label>
+          <label><input type="checkbox" id="acClipboard" checked> clipboard</label>
+          <label><input type="checkbox" id="acTunnels"> tunnels</label>
+          <label><input type="checkbox" id="acDesktop" checked> desktop</label>
+          <label><input type="checkbox" id="acViewOnly"> view-only</label>
+        </div>
+        <div class="row"><button class="act primary" id="acCreate">Create access code</button></div>
+        <p id="acCreated" style="display:none">Code: <code id="acCode" style="font-size:1.2rem"></code> <span class="small">(shown once — copy it now)</span></p>
+        <div id="acLists" class="small"></div>
+      </div>
+      <div class="card"><h3>Server certificate fingerprint</h3><p><code id="accFp">…</code></p>
+        <p class="small">Clients pin this. Agent fleet configs pin it too.</p></div>
+    </div>
+  </section>
+</main>
+
+<script>
+let CSRF = '';
+const $ = id => document.getElementById(id);
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers || {});
+  if (opts.method && opts.method !== 'GET') opts.headers['X-CSRF'] = CSRF;
+  if (opts.json) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+  const r = await fetch(path, opts);
+  if (r.status === 401) { location.href = '/panel/login'; throw new Error('login'); }
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { return t; }
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('main section').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  $('tab-' + b.dataset.tab).classList.add('active');
+  ({devices: loadDevices, audit: loadAudit, access: loadAccess, mesh: loadMesh, activity: loadActivity, scripts: loadScripts}[b.dataset.tab] || (()=>{}))();
+});
+
+let devices = [];
+let healthByCode = {};
+function healthBadge(code) {
+  const h = healthByCode[code];
+  if (!h) return '';
+  if (h.overall === 'fail') return '<br><span class="badge" style="border-color:var(--bad);color:var(--bad)">health: fail</span>';
+  if (h.overall === 'warn') return '<br><span class="badge" style="border-color:var(--warn);color:var(--warn)">health: warn</span>';
+  return '<br><span class="badge" style="border-color:var(--ok);color:var(--ok)">health: ok</span>';
+}
+async function loadDevices() {
+  devices = await api('/panel/api/devices');
+  try {
+    const health = await api('/panel/api/health');
+    healthByCode = {}; (health || []).forEach(h => healthByCode[h.code] = h);
+  } catch { healthByCode = {}; }
+  try {
+    const a = await api('/panel/api/access');
+    if (a.alertsLast24h > 0) { $('hdrAlerts').style.display = ''; $('hdrAlerts').textContent = '⚠ ' + a.alertsLast24h + ' alert(s) / 24h'; }
+    else $('hdrAlerts').style.display = 'none';
+  } catch { }
+  const pend = devices.filter(d => d.state === 'Pending').length;
+  $('hdrInfo').textContent = devices.length + ' devices · ' + devices.filter(d => d.online).length + ' online' + (pend ? ' · ' + pend + ' pending approval' : '');
+  $('devBody').innerHTML = devices.map(d => `<tr>
+    <td><code>${esc(d.code)}</code></td>
+    <td>${esc(d.name)}<br><button class="act" onclick="renameDev('${d.code}')">Rename</button></td>
+    <td>${esc(d.os)}<br><span class="mut">${esc(d.version)}</span></td>
+    <td>${esc((d.ips || []).join(', ') || '—')}</td>
+    <td><span class="badge ${d.online ? 'on' : ''}">${d.online ? 'online' : 'offline'}</span> <span class="badge ${d.state === 'Pending' ? 'pend' : d.state === 'Rejected' ? 'rej' : ''}">${esc(d.state)}</span></td>
+    <td>${esc((d.groups || []).join(', '))}<br><button class="act" onclick="groupsDev('${d.code}')">Edit groups</button></td>
+    <td>${esc((d.lastSeen || '').replace('T', ' ').slice(0, 19))}${healthBadge(d.code)}</td>
+    <td>${d.state === 'Approved' ? `<button class="act primary" onclick="openDevice('${d.code}')">Open</button> <button class="act" onclick="wakeDev('${d.code}')">Wake</button> ` : ''}${d.state !== 'Approved' ? `<button class="act primary" onclick="approveDev('${d.code}')">Approve</button> ` : ''}${d.state !== 'Rejected' ? `<button class="act danger" onclick="rejectDev('${d.code}')">Reject</button>` : ''}</td>
+  </tr>`).join('');
+  const sel = $('conDevice');
+  const approved = devices.filter(d => d.state === 'Approved');
+  sel.innerHTML = approved.map(d => `<option value="${d.code}">${esc(d.code)} — ${esc(d.name)}${d.online ? '' : ' (offline)'}</option>`).join('');
+  updateDirectLink();
+}
+async function approveDev(code) { await api('/panel/api/devices/approve', {method: 'POST', json: {code}}); loadDevices(); }
+async function rejectDev(code) { if (!confirm('Reject ' + code + '? It will receive nothing.')) return; await api('/panel/api/devices/reject', {method: 'POST', json: {code}}); loadDevices(); }
+async function renameDev(code) { const name = prompt('New name for ' + code); if (name) { await api('/panel/api/devices/rename', {method: 'POST', json: {code, name}}); loadDevices(); } }
+async function groupsDev(code) { const g = prompt('Groups for ' + code + ' (comma-separated)'); if (g !== null) { await api('/panel/api/devices/groups', {method: 'POST', json: {code, groups: g.split(',').map(x => x.trim()).filter(Boolean)}}); loadDevices(); } }
+$('devRefresh').onclick = loadDevices;
+
+function updateDirectLink() {
+  const d = devices.find(x => x.code === $('conDevice').value);
+  $('conDirect').textContent = d && d.ips && d.ips.length ? `https://${d.ips[0]}:8737/panel/` : '— (device reports no tailnet IP)';
+}
+$('conDevice').onchange = updateDirectLink;
+
+async function panelCommand(path, body, method = 'POST') {
+  const code = $('conDevice').value;
+  if (!code) return {error: 'No approved device selected.'};
+  return api('/panel/api/command', {method: 'POST', json: {code, method, path, body}});
+}
+function showCon(r) {
+  const o = $('conOut'); o.style.display = 'block';
+  if (r.error) { o.textContent = 'Error: ' + r.error; return; }
+  const b = r.body;
+  if (b && typeof b === 'object' && 'stdout' in b) o.textContent = (b.stdout || '') + (b.stderr ? '\n[stderr]\n' + b.stderr : '') + '\n[exit ' + b.exitCode + ']';
+  else o.textContent = JSON.stringify(b, null, 2);
+}
+$('conRun').onclick = async () => {
+  $('conOut').style.display = 'block'; $('conOut').textContent = 'Running…';
+  showCon(await panelCommand('/api/shell', {shell: $('conShell').value, script: $('conScript').value, timeoutMs: 300000}));
+};
+document.querySelectorAll('[data-quick]').forEach(b => b.onclick = async () => {
+  $('conOut').style.display = 'block'; $('conOut').textContent = 'Loading…';
+  showCon(await panelCommand(b.dataset.quick, undefined, 'GET'));
+});
+
+async function loadAudit() {
+  const r = await api('/panel/api/audit?lines=300');
+  $('auditOut').textContent = (r.lines || []).join('\n');
+}
+$('auditRefresh').onclick = loadAudit;
+
+async function loadAccess() {
+  loadAccessCodes();
+  const a = await api('/panel/api/access');
+  $('accTotpState').textContent = a.totpEnabled ? 'Enabled' : 'Off';
+  $('accTotpState').style.color = a.totpEnabled ? 'var(--ok)' : 'var(--mut)';
+  $('accWebhookUrl').value = a.webhookUrl || '';
+  $('accWebhookState').textContent = a.webhookUrl ? (a.webhookSecretSet ? 'secret set' : 'no secret') : 'not configured';
+  $('accOpState').textContent = a.operatorEnabled ? 'Active' : 'REVOKED';
+  $('accOpState').style.color = a.operatorEnabled ? 'var(--ok)' : 'var(--bad)';
+  $('accFp').textContent = a.certFingerprint;
+  $('accBanner').innerHTML = a.operatorEnabled ? '' : '<div class="banner">Operator access is REVOKED. The operator cannot reach any device until you restore it.</div>';
+}
+$('acCreate').onclick = async () => {
+  const scope = {exec: $('acExec').checked, files: $('acFiles').checked, clipboard: $('acClipboard').checked,
+                 tunnels: $('acTunnels').checked, desktopControl: $('acDesktop').checked, desktopViewOnly: $('acViewOnly').checked};
+  const uses = parseInt($('acUses').value, 10);
+  const r = await api('/panel/api/access/codes', {method: 'POST', json: {deviceCode: $('acDevice').value.trim(), scope, expiresMinutes: parseInt($('acMinutes').value, 10) || 60, maxUses: isNaN(uses) ? null : uses}});
+  if (r.code) { $('acCreated').style.display = ''; $('acCode').textContent = r.code; loadAccessCodes(); }
+  else alert(r.error || 'Could not create the code.');
+};
+async function loadAccessCodes() {
+  const r = await api('/panel/api/access/grants');
+  if (!r.codes) return;
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let h = '';
+  if (r.codes.length) {
+    h += '<p><b>Codes</b></p>' + r.codes.map(c => `<div>${esc(c.deviceCode)} · exp ${new Date(c.expiresAt).toLocaleString()} · used ${c.uses}${c.maxUses ? '/' + c.maxUses : ''}${c.revoked ? ' · REVOKED' : ''}${c.expired ? ' · EXPIRED' : ''} ${c.revoked || c.expired ? '' : `<button class="act danger" data-revoke="${esc(c.id)}">Revoke</button>`}</div>`).join('');
+  }
+  if (r.grants.length) {
+    h += '<p><b>Live grants</b></p>' + r.grants.map(g => `<div>grant ${esc(g.id.slice(0, 8))}… → ${esc(g.deviceCode)} · from ${esc(g.redeemedFrom)} · ${g.actions} action(s) · exp ${new Date(g.expiresAt).toLocaleString()}${g.revoked ? ' · REVOKED' : ''}${g.active ? ` <button class="act danger" data-revoke="${esc(g.id)}">Revoke now</button>` : ''}</div>`).join('');
+  }
+  $('acLists').innerHTML = h || '<p class="small">No access codes yet.</p>';
+  $('acLists').querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => {
+    if (!confirm('Revoke this access immediately?')) return;
+    await api('/panel/api/access/revoke', {method: 'POST', json: {id: b.dataset.revoke}});
+    loadAccessCodes();
+  });
+}
+$('accRevoke').onclick = async () => { if (!confirm('Revoke the operator everywhere?')) return; await api('/panel/api/access/revoke-operator', {method: 'POST'}); loadAccess(); };
+$('accRestore').onclick = async () => { await api('/panel/api/access/restore-operator', {method: 'POST'}); loadAccess(); };
+$('accRotateKey').onclick = async () => {
+  const k = $('accNewKey').value.trim(); if (!k) return;
+  if (!confirm('Rotate the operator key? The old key dies immediately.')) return;
+  const r = await api('/panel/api/access/rotate-operator-key', {method: 'POST', json: {newPublicKey: k}});
+  $('accRotateMsg').textContent = r.rotated ? 'Rotated ✓ devices notified: ' + r.devicesNotified : ('Failed: ' + (r.error || ''));
+};
+$('accChangePw').onclick = async () => {
+  const r = await api('/panel/api/access/change-password', {method: 'POST', json: {currentPassword: $('pwCurrent').value, newPassword: $('pwNew').value}});
+  $('pwMsg').textContent = r.changed ? 'Password changed ✓' : ('Failed: ' + (r.error || ''));
+};
+
+// ----- mesh -----
+let meshState = null;
+async function loadMesh() {
+  meshState = await api('/panel/api/mesh');
+  $('meshInfo').textContent = 'WireGuard mesh · range ' + meshState.cidr + (meshState.relayEndpoint ? ' · relay ' + meshState.relayEndpoint : ' · no relay endpoint configured') + ' · devices reachable by name (MagicDNS-lite)';
+  $('meshBody').innerHTML = meshState.devices.map(d => `<tr>
+    <td><code>${esc(d.code)}</code><br>${esc(d.name)}</td>
+    <td>${esc(d.virtualIp || '—')}</td>
+    <td><code class="small">${esc((d.wgPublicKey || '').slice(0, 20))}…</code></td>
+    <td>${esc((d.advertisedSubnets || []).join(', ') || '—')}</td>
+    <td>${esc((d.approvedSubnets || []).join(', ') || '—')}</td>
+    <td><button class="act" onclick="approveSubnets('${d.code}')">Subnets…</button></td></tr>`).join('');
+  $('aclText').value = (meshState.aclRules || []).map(r => `${r.from} -> ${r.to} ${(r.ports || []).join(',')}`).join('\n');
+  $('exitSel').innerHTML = (meshState.devices || []).map(d => `<option value="${d.code}" ${d.exitNode ? 'selected' : ''}>${esc(d.code)} — ${esc(d.name)}${d.exitNode ? ' (exit node)' : ''}</option>`).join('');
+  $('ekBody').innerHTML = (meshState.enrollmentKeys || []).map(k => `<tr>
+    <td><code>${esc(k.id)}</code></td><td>${k.usesLeft === null ? '∞' : k.usesLeft}</td><td>${esc(k.createdBy)}</td><td>${esc(k.note)}</td>
+    <td><button class="act" onclick="revokeKey('${k.id}')">Revoke</button></td></tr>`).join('');
+}
+window.approveSubnets = async code => {
+  const d = (meshState.devices || []).find(x => x.code === code); if (!d) return;
+  const v = prompt('Approved subnets for ' + code + ' (comma-separated CIDRs; advertised: ' + (d.advertisedSubnets || []).join(', ') + ')', (d.approvedSubnets || []).join(', '));
+  if (v === null) return;
+  await api('/panel/api/mesh/subnets', {method: 'POST', json: {code, approved: v.split(',').map(s => s.trim()).filter(Boolean)}});
+  loadMesh();
+};
+window.revokeKey = async id => { if (!confirm('Revoke enrollment key ' + id + '?')) return; await api('/panel/api/mesh/enrollment-keys/revoke', {method: 'POST', json: {id}}); loadMesh(); };
+$('meshRefresh').onclick = loadMesh;
+$('aclSave').onclick = async () => {
+  const rules = $('aclText').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const m = l.match(/^(.+?)\s*->\s*(\S+)\s*(.*)$/); if (!m) return null;
+    return {from: m[1].trim(), to: m[2].trim(), ports: m[3] ? m[3].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : []};
+  }).filter(Boolean);
+  const r = await api('/panel/api/mesh/acl', {method: 'POST', json: {rules}});
+  $('aclMsg').textContent = r.rules !== undefined ? 'Saved ✓ ' + r.rules + ' rule(s), pushed to devices' : ('Failed: ' + (r.error || ''));
+};
+$('ekCreate').onclick = async () => {
+  const uses = $('ekUses').value ? parseInt($('ekUses').value) : null;
+  const r = await api('/panel/api/mesh/enrollment-keys', {method: 'POST', json: {uses, note: $('ekNote').value}});
+  $('ekNew').innerHTML = r.key ? 'New key (shown once — copy it now): <code>' + esc(r.key) + '</code>' : ('Failed: ' + (r.error || ''));
+  loadMesh();
+};
+
+// ----- i18n (EN/AR, RTL for Arabic) -----
+const I18N = {
+  en: { fleetTitle: 'EsoAgent Fleet', signOut: 'Sign out', devices: 'Devices', console: 'Device console', activity: 'Activity', scripts: 'Scripts', mesh: 'Mesh', audit: 'Fleet audit', access: 'Access', refresh: 'Refresh', addScript: 'Add / edit script', runScript: 'Run a script', save: 'Save script', back: '← All devices', status: 'Status', desktop: 'Desktop', files: 'Files' },
+  ar: { fleetTitle: 'أسطول EsoAgent', signOut: 'تسجيل الخروج', devices: 'الأجهزة', console: 'وحدة تحكم الجهاز', activity: 'النشاط', scripts: 'البرامج النصية', mesh: 'الشبكة', audit: 'سجل الأسطول', access: 'الوصول', refresh: 'تحديث', addScript: 'إضافة / تعديل برنامج', runScript: 'تشغيل برنامج', save: 'حفظ البرنامج', back: '→ كل الأجهزة', status: 'الحالة', desktop: 'سطح المكتب', files: 'الملفات' },
+};
+let lang = localStorage.getItem('eso-lang') || 'en';
+function applyLang() {
+  const dict = I18N[lang] || I18N.en;
+  document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.dataset.i18n; if (dict[k]) el.textContent = dict[k]; });
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  $('langToggle').textContent = lang === 'ar' ? 'English' : 'العربية';
+}
+$('langToggle').onclick = () => { lang = lang === 'ar' ? 'en' : 'ar'; localStorage.setItem('eso-lang', lang); applyLang(); };
+
+// ----- wake -----
+window.wakeDev = async code => {
+  const r = await api('/panel/api/wake', {method: 'POST', json: {code}});
+  if (r.error) { alert('Wake failed: ' + r.error); return; }
+  const sent = (r.results || []).filter(x => x.sent).length;
+  alert('Magic packet for ' + code + ': sent by ' + sent + ' sender(s) — ' + (r.macs || []).join(', '));
+};
+
+// ----- activity tab (the unified timeline) -----
+function actQuery() {
+  const q = new URLSearchParams();
+  if ($('actDevice').value.trim()) q.set('device', $('actDevice').value.trim());
+  if ($('actSource').value) q.set('source', $('actSource').value);
+  if ($('actSince').value) q.set('since', new Date($('actSince').value).toISOString());
+  q.set('limit', '300');
+  return q;
+}
+async function loadActivity() {
+  const evs = await api('/panel/api/activity?' + actQuery().toString());
+  $('actOut').textContent = (evs || []).slice().reverse().map(e =>
+    `${(e.at || '').replace('T', ' ').slice(0, 19)}  [${e.source}]  ${e.deviceName || e.deviceCode || '—'}  ${e.kind}: ${e.summary}  (${e.result})`).join('\n') || '(no activity yet)';
+  const q = actQuery();
+  $('actExportJson').href = '/panel/api/activity/export?' + q.toString();
+  q.set('format', 'csv');
+  $('actExportCsv').href = '/panel/api/activity/export?' + q.toString();
+}
+$('actRefresh').onclick = loadActivity;
+
+// ----- script library -----
+let scripts = [];
+async function loadScripts() {
+  scripts = await api('/panel/api/scripts');
+  $('scBody2').innerHTML = scripts.map(x => `<tr>
+    <td>${esc(x.name)}<br><span class="mut">${esc(x.description || '')}</span></td>
+    <td>${esc(x.shell)}</td><td>${esc(x.createdBy)}</td>
+    <td>${esc((x.updatedAt || '').replace('T', ' ').slice(0, 19))}</td>
+    <td><button class="act" onclick="editScript('${x.id}')">Edit</button> <button class="act danger" onclick="delScript('${x.id}')">Delete</button></td></tr>`).join('');
+  $('scPick').innerHTML = scripts.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+}
+window.editScript = id => {
+  const x = scripts.find(v => v.id === id); if (!x) return;
+  $('scName').value = x.name; $('scShell').value = x.shell; $('scBody').value = x.body;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+};
+window.delScript = async id => { if (!confirm('Delete this script?')) return; await api('/panel/api/scripts/' + id, {method: 'DELETE'}); loadScripts(); };
+$('scSave').onclick = async () => {
+  const existing = scripts.find(x => x.name === $('scName').value.trim());
+  const r = await api('/panel/api/scripts', {method: 'POST', json: {id: existing ? existing.id : '', name: $('scName').value.trim(), shell: $('scShell').value, body: $('scBody').value, description: existing ? existing.description : ''}});
+  $('scMsg').textContent = r.error ? ('Failed: ' + r.error) : 'Saved ✓';
+  loadScripts();
+};
+$('scRun').onclick = async () => {
+  const id = $('scPick').value; if (!id) return;
+  const targets = $('scTargets').value.split(',').map(x => x.trim()).filter(Boolean);
+  if (!targets.length) { alert('Enter at least one device code.'); return; }
+  $('scOut').style.display = 'block'; $('scOut').textContent = 'Running…';
+  const r = await api('/panel/api/scripts/' + id + '/run', {method: 'POST', json: {targets}});
+  if (r.error) { $('scOut').textContent = 'Error: ' + r.error; return; }
+  $('scOut').textContent = (r.results || []).map(x => {
+    const b = x.body;
+    const text = b && typeof b === 'object' && 'stdout' in b ? (b.stdout || '') + (b.stderr ? '\n[stderr]\n' + b.stderr : '') + '\n[exit ' + b.exitCode + ']' : JSON.stringify(b);
+    return `== ${x.code} — ${x.ok ? 'OK' : 'FAILED ' + (x.error || '')}\n${text}`;
+  }).join('\n\n');
+};
+
+// ----- 2FA + webhook -----
+$('accTotpBegin').onclick = async () => {
+  const r = await api('/panel/api/access/2fa/begin', {method: 'POST'});
+  if (r.error) { $('accTotpMsg').textContent = 'Failed: ' + r.error; return; }
+  $('accTotpSecret').textContent = r.secret + '   (' + r.otpauthUri + ')';
+  $('accTotpBox').style.display = 'block';
+};
+$('accTotpConfirm').onclick = async () => {
+  const r = await api('/panel/api/access/2fa/confirm', {method: 'POST', json: {code: $('accTotpCode').value.trim()}});
+  $('accTotpMsg').textContent = r.totpEnabled ? '2FA enabled ✓' : ('Failed: ' + (r.error || ''));
+  if (r.totpEnabled) { $('accTotpBox').style.display = 'none'; loadAccess(); }
+};
+$('accTotpDisable').onclick = async () => {
+  const r = await api('/panel/api/access/2fa/disable', {method: 'POST', json: {currentPassword: $('accTotpPw').value}});
+  $('accTotpMsg').textContent = r.totpEnabled === false ? '2FA disabled ✓' : ('Failed: ' + (r.error || ''));
+  loadAccess();
+};
+$('accWebhookSave').onclick = async () => {
+  const r = await api('/panel/api/access/webhook', {method: 'POST', json: {url: $('accWebhookUrl').value.trim() || null}});
+  $('accWebhookMsg').textContent = r.error ? ('Failed: ' + r.error)
+    : 'Saved ✓' + (r.webhookSecret ? ' — signing secret (shown once): ' + r.webhookSecret : (r.webhookUrl ? ' — secret already set' : ' — webhook cleared'));
+  loadAccess();
+};
+
+// ----- exit node -----
+$('exitSet').onclick = async () => {
+  const code = $('exitSel').value; if (!code) return;
+  const r = await api('/panel/api/mesh/exit-node', {method: 'POST', json: {code}});
+  $('exitMsg').textContent = r.error ? ('Failed: ' + r.error) : 'Exit node: ' + r.exitNode + ' ✓ (devices told on their next mesh push)';
+};
+$('exitClear').onclick = async () => {
+  const r = await api('/panel/api/mesh/exit-node', {method: 'POST', json: {code: null}});
+  $('exitMsg').textContent = r.error ? ('Failed: ' + r.error) : 'Exit node cleared ✓';
+};
+
+// ----- device view: one web face for every device -----
+let dvCode = null, dvParent = null;
+function showSection(id) {
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('main section').forEach(x => x.classList.remove('active'));
+  $(id).classList.add('active');
+}
+window.openDevice = code => {
+  dvCode = code;
+  const d = devices.find(x => x.code === code);
+  $('dvTitle').textContent = (d ? d.name + ' · ' : '') + code;
+  const h = healthByCode[code];
+  $('dvHealth').textContent = h ? `health: ${h.overall} · disk ${h.diskFreePercent}% free · cert ${h.certDaysLeft} d · last doctor ${(h.at || '').replace('T', ' ').slice(0, 19)}` : '';
+  showSection('tab-device');
+  history.replaceState(null, '', '?device=' + encodeURIComponent(code));
+  dvShowSub('status');
+  dvQuick('/api/status');
+  loadDvFiles('');
+};
+$('dvBack').onclick = () => {
+  history.replaceState(null, '', location.pathname);
+  document.querySelector('[data-tab="devices"]').click();
+};
+function dvShowSub(name) {
+  document.querySelectorAll('.dv-sub').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
+  ['status', 'desktop', 'files', 'activity'].forEach(n => $('dv-' + n).style.display = n === name ? 'block' : 'none');
+  if (name === 'activity') loadDvActivity();
+}
+document.querySelectorAll('.dv-sub').forEach(b => b.onclick = () => dvShowSub(b.dataset.sub));
+
+async function devCommand(method, path, body, bodyBase64) {
+  if (!dvCode) return {error: 'No device open.'};
+  return api('/panel/api/command', {method: 'POST', json: {code: dvCode, method, path, body, bodyBase64}});
+}
+function dvShow(r, out) {
+  const o = $(out); o.style.display = 'block';
+  if (r.error) { o.textContent = 'Error: ' + r.error; return; }
+  const b = r.body;
+  if (b && typeof b === 'object' && 'stdout' in b) o.textContent = (b.stdout || '') + (b.stderr ? '\n[stderr]\n' + b.stderr : '') + '\n[exit ' + b.exitCode + ']';
+  else o.textContent = JSON.stringify(b, null, 2);
+}
+async function dvQuick(path) { $('dvStatusOut').textContent = 'Loading…'; dvShow(await devCommand('GET', path), 'dvStatusOut'); }
+document.querySelectorAll('[data-dvquick]').forEach(b => b.onclick = () => dvQuick(b.dataset.dvquick));
+
+async function loadDvActivity() {
+  const evs = await api('/panel/api/activity?device=' + encodeURIComponent(dvCode) + '&limit=200');
+  $('dvActOut').textContent = (evs || []).slice().reverse().map(e =>
+    `${(e.at || '').replace('T', ' ').slice(0, 19)}  [${e.source}]  ${e.kind}: ${e.summary}  (${e.result})`).join('\n') || '(no activity yet)';
+}
+$('dvActRefresh').onclick = loadDvActivity;
+
+// device-view files (browse/upload/download/delete/rename/mkdir via the panel command channel)
+async function loadDvFiles(path) {
+  const r = await devCommand('GET', '/api/files/list?path=' + encodeURIComponent(path || ''));
+  if (r.error || !r.body) { $('dvFileMsg').textContent = 'List failed: ' + (r.error || 'no reply'); return; }
+  const list = r.body;
+  $('dvFilePath').value = list.path; dvParent = list.parent;
+  $('dvFileMsg').textContent = list.entries.length + ' item(s)';
+  $('dvFileBody').innerHTML = list.entries.map(e => `<tr>
+    <td>${e.isDir ? `<a href="#" onclick="dvOpenDir('${encodeURIComponent(e.path)}');return false">${esc(e.name)}/</a>` : esc(e.name)}</td>
+    <td>${e.isDir ? '' : e.size}</td>
+    <td>${e.isDir ? '' : `<button class="act" onclick="dvDownload('${encodeURIComponent(e.path)}','${esc(e.name)}')">Download</button> `}
+        <button class="act" onclick="dvRename('${encodeURIComponent(e.path)}')">Rename</button>
+        <button class="act danger" onclick="dvDelete('${encodeURIComponent(e.path)}')">Delete</button></td></tr>`).join('');
+}
+window.dvOpenDir = enc => loadDvFiles(decodeURIComponent(enc));
+$('dvFileGo').onclick = () => loadDvFiles($('dvFilePath').value);
+$('dvFileUp').onclick = () => { if (dvParent) loadDvFiles(dvParent); };
+window.dvDelete = async enc => {
+  if (!confirm('Delete this item on the device?')) return;
+  const r = await devCommand('POST', '/api/files/delete', {path: decodeURIComponent(enc)});
+  $('dvFileMsg').textContent = r.error ? 'Delete failed: ' + r.error : 'Deleted ✓';
+  loadDvFiles($('dvFilePath').value);
+};
+window.dvRename = async enc => {
+  const name = prompt('New name:'); if (!name) return;
+  const from = decodeURIComponent(enc);
+  const dir = from.replace(/[\\/][^\\/]*$/, '');
+  const sep = from.includes('\\') ? '\\' : '/';
+  const r = await devCommand('POST', '/api/files/rename', {path: from, newPath: dir + sep + name});
+  $('dvFileMsg').textContent = r.error ? 'Rename failed: ' + r.error : 'Renamed ✓';
+  loadDvFiles($('dvFilePath').value);
+};
+window.dvDownload = async (enc, name) => {
+  const path = decodeURIComponent(enc);
+  const info = await devCommand('GET', '/api/files/info?path=' + encodeURIComponent(path));
+  if (info.error || !info.body) { $('dvFileMsg').textContent = 'Download failed: ' + (info.error || ''); return; }
+  const size = info.body.size;
+  const parts = [];
+  let offset = 0;
+  while (offset < size) {
+    const len = Math.min(1024 * 1024, size - offset);
+    const resp = await fetch(`/panel/api/download?code=${encodeURIComponent(dvCode)}&path=${encodeURIComponent(path)}&offset=${offset}&length=${len}`);
+    if (!resp.ok) { $('dvFileMsg').textContent = 'Download failed at ' + offset; return; }
+    const buf = await resp.arrayBuffer();
+    parts.push(buf); offset += buf.byteLength;
+    $('dvFileMsg').textContent = `Downloading… ${offset}/${size}`;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(parts));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  $('dvFileMsg').textContent = 'Downloaded ' + size + ' bytes ✓';
+};
+$('dvFileUpload').onchange = async ev => {
+  const file = ev.target.files[0]; ev.target.value = '';
+  if (!file) return;
+  const dir = $('dvFilePath').value;
+  const sep = dir.includes('\\') ? '\\' : '/';
+  const remote = (dir.endsWith(sep) ? dir : dir + sep) + file.name;
+  $('dvFileMsg').textContent = 'Uploading ' + file.name + '…';
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const sha = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+  const b64 = buf => { let bin = ''; const chunk = 32768; for (let i = 0; i < buf.length; i += chunk) bin += String.fromCharCode.apply(null, buf.subarray(i, i + chunk)); return btoa(bin); };
+  let r = await devCommand('POST', '/api/files/begin', {path: remote});
+  if (r.error) { $('dvFileMsg').textContent = 'Upload failed: ' + r.error; return; }
+  let offset = (r.body && r.body.received) || 0;
+  const CH = 256 * 1024;
+  while (offset < bytes.length) {
+    const part = bytes.subarray(offset, Math.min(offset + CH, bytes.length));
+    r = await devCommand('PUT', '/api/files/chunk?path=' + encodeURIComponent(remote) + '&offset=' + offset, undefined, b64(part));
+    if (r.error || !r.body) { $('dvFileMsg').textContent = 'Upload failed at ' + offset + ': ' + (r.error || ''); return; }
+    offset = r.body.received;
+    $('dvFileMsg').textContent = `Uploading… ${offset}/${bytes.length}`;
+  }
+  r = await devCommand('POST', '/api/files/commit', {path: remote, sha256: sha});
+  $('dvFileMsg').textContent = r.error ? 'Commit failed: ' + r.error : 'Uploaded ✓ SHA-256 verified by the device';
+  loadDvFiles(dir);
+};
+
+// device-view desktop (relayed; renderer mirrors the agent panel's, plus privacy/chat/record)
+let fdWs = null, fdCodec = 'jpeg', fdOff = null, fdOffCtx = null, fdPrivacy = false;
+const fdCanvas = $('fdCanvas'), fdCtx = fdCanvas.getContext('2d');
+function fdSend(obj) { if (fdWs && fdWs.readyState === 1) fdWs.send(JSON.stringify(obj)); }
+async function fdDrawRawDiff(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const dv = new DataView(bytes.buffer);
+  const w = dv.getUint16(3, true), h = dv.getUint16(5, true), tile = dv.getUint16(7, true), count = dv.getUint32(9, true);
+  if (!fdOff || fdOff.width !== w || fdOff.height !== h) { fdOff = document.createElement('canvas'); fdOff.width = w; fdOff.height = h; fdOffCtx = fdOff.getContext('2d'); }
+  const inflated = await new Response(new Blob([bytes.slice(13)]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer();
+  const data = new Uint8Array(inflated);
+  const cols = Math.ceil(w / tile);
+  let pos = 0;
+  for (let t = 0; t < count; t++) {
+    const idx = new DataView(data.buffer, data.byteOffset + pos, 4).getUint32(0, true); pos += 4;
+    const tx = (idx % cols) * tile, ty = Math.floor(idx / cols) * tile;
+    const tw = Math.min(tile, w - tx), th = Math.min(tile, h - ty);
+    const img = fdOffCtx.createImageData(tw, th);
+    for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+      const s2 = pos + (y * tw + x) * 4, d2 = (y * tw + x) * 4;
+      img.data[d2] = data[s2 + 2]; img.data[d2 + 1] = data[s2 + 1]; img.data[d2 + 2] = data[s2]; img.data[d2 + 3] = 255;
+    }
+    pos += tw * th * 4;
+    fdOffCtx.putImageData(img, tx, ty);
+  }
+  if (fdCanvas.width !== w) { fdCanvas.width = w; fdCanvas.height = h; }
+  fdCtx.drawImage(fdOff, 0, 0);
+}
+$('fdStart').onclick = () => {
+  if (!dvCode) return;
+  fdWs = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/panel/desktop-relay?code=' + encodeURIComponent(dvCode));
+  fdWs.onopen = () => fdSend({type: 'hello', mode: $('fdMode').value, codecs: ['jpeg', 'rawdiff'], monitor: parseInt($('fdMonitor').value || '0'), quality: parseInt($('fdQuality').value), maxFps: 12, record: $('fdRecord').checked});
+  fdWs.onmessage = async ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'welcome') {
+      if (msg.error) { $('fdState').textContent = 'Unavailable: ' + msg.error; fdWs.close(); return; }
+      fdCodec = msg.codec;
+      $('fdMonitor').innerHTML = (msg.monitors || []).map(m => `<option value="${m.index}">${esc(m.name)} (${m.width}×${m.height})</option>`).join('');
+      fdCanvas.width = msg.width; fdCanvas.height = msg.height;
+      $('fdState').textContent = 'Live · ' + msg.mode + ' · ' + msg.codec + (msg.recording ? ' · ● recording to ' + msg.recording : '');
+      $('fdStart').disabled = true; $('fdStop').disabled = false; $('fdPrivacy').disabled = false; $('fdChatSend').disabled = false;
+    } else if (msg.type === 'frame') {
+      if (msg.codec === 'jpeg') {
+        const bin = Uint8Array.from(atob(msg.data), c => c.charCodeAt(0));
+        const bmp = await createImageBitmap(new Blob([bin], {type: 'image/jpeg'}));
+        if (fdCanvas.width !== bmp.width) { fdCanvas.width = bmp.width; fdCanvas.height = bmp.height; }
+        fdCtx.drawImage(bmp, 0, 0); bmp.close();
+      } else { await fdDrawRawDiff(msg.data); }
+    } else if (msg.type === 'clipboard') {
+      try { await navigator.clipboard.writeText(msg.text); } catch {}
+    } else if (msg.type === 'chat') {
+      const log = $('fdChatLog'); log.style.display = 'block';
+      log.textContent += 'device: ' + msg.text + '\n';
+    } else if (msg.type === 'privacy') {
+      fdPrivacy = !!msg.enabled;
+      $('fdPrivacy').textContent = fdPrivacy ? 'Privacy: ON' : 'Privacy: off';
+    } else if (msg.type === 'close') {
+      $('fdState').textContent = 'Session ended: ' + (msg.reason || '');
+      $('fdStart').disabled = false; $('fdStop').disabled = true; $('fdPrivacy').disabled = true; $('fdChatSend').disabled = true;
+    }
+  };
+  fdWs.onclose = () => { $('fdStart').disabled = false; $('fdStop').disabled = true; $('fdPrivacy').disabled = true; $('fdChatSend').disabled = true; };
+};
+$('fdStop').onclick = () => { fdSend({type: 'close'}); if (fdWs) fdWs.close(); };
+$('fdPrivacy').onclick = () => fdSend({type: 'privacy', enabled: !fdPrivacy});
+$('fdChatSend').onclick = () => {
+  const text = $('fdChatIn').value.trim(); if (!text) return;
+  $('fdChatIn').value = '';
+  const log = $('fdChatLog'); log.style.display = 'block';
+  log.textContent += 'you: ' + text + '\n';
+  fdSend({type: 'chat', text, from: 'owner'});
+};
+function fdPos(ev) { const r = fdCanvas.getBoundingClientRect(); return {x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height}; }
+let fdLastMove = 0;
+fdCanvas.addEventListener('mousemove', ev => { const n = Date.now(); if (n - fdLastMove < 33) return; fdLastMove = n; const p = fdPos(ev); fdSend({type: 'input', kind: 'mouseMove', x: p.x, y: p.y}); });
+fdCanvas.addEventListener('mousedown', ev => { const p = fdPos(ev); fdSend({type: 'input', kind: 'mouseButton', button: ['left','middle','right'][ev.button] || 'left', down: true, x: p.x, y: p.y}); });
+fdCanvas.addEventListener('mouseup', ev => { const p = fdPos(ev); fdSend({type: 'input', kind: 'mouseButton', button: ['left','middle','right'][ev.button] || 'left', down: false, x: p.x, y: p.y}); });
+fdCanvas.addEventListener('wheel', ev => { ev.preventDefault(); fdSend({type: 'input', kind: 'wheel', delta: Math.sign(ev.deltaY) * -120}); }, {passive: false});
+fdCanvas.addEventListener('contextmenu', ev => ev.preventDefault());
+fdCanvas.addEventListener('keydown', ev => { ev.preventDefault(); fdSend({type: 'input', kind: 'key', key: ev.key, down: true, ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}); });
+fdCanvas.addEventListener('keyup', ev => { ev.preventDefault(); fdSend({type: 'input', kind: 'key', key: ev.key, down: false, ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}); });
+
+(async () => {
+  const s = await api('/panel/api/session');
+  CSRF = s.csrf;
+  applyLang();
+  await loadDevices();
+  const deep = new URLSearchParams(location.search).get('device');
+  if (deep && devices.some(d => d.code === deep)) openDevice(deep);
+})();
+</script>
+</body>
+</html>

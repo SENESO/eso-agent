@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+dist/
+*.user
+
+# Release signing key — NEVER committed (held in the release pipeline)
+.release-key/
+
+# Internal working material
+.smoke/
+*.bak
+*.orig
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vs/
+.idea/

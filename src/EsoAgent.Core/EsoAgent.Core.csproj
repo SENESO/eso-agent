@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>EsoAgent.Core</RootNamespace>
+    <AssemblyName>EsoAgent.Core</AssemblyName>
+    <!-- Core is platform-neutral: protocol, auth, audit, shared capability logic.
+         ASP.NET Core is a framework reference only (no package), so heads stay lean. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Unit tests exercise internal seams (e.g. the relay desktop channel factory). -->
+    <InternalsVisibleTo Include="EsoAgent.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Owner panel pages: embedded so the binary is fully self-contained (no npm, no external assets). -->
+    <EmbeddedResource Include="Dashboard.html" />
+    <EmbeddedResource Include="DashboardLogin.html" />
+    <!-- Perception scripts (item 36): materialized on demand by the app bridge. -->
+    <EmbeddedResource Include="PerceiveScripts\blender_perceive.py" />
+    <EmbeddedResource Include="PerceiveScripts\unreal_perceive.py" />
+    <EmbeddedResource Include="PerceiveScripts\godot_perceive.gd" />
+  </ItemGroup>
+</Project>

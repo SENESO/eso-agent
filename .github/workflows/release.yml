@@ -1,0 +1,143 @@
+# EsoAgent release pipeline (item 45).
+#
+# Tag v* -> build EVERYTHING on GitHub-hosted runners from this public
+# repo -> sign the update manifest with the pinned release key (secret)
+# -> optionally submit Windows binaries to SignPath Foundation ->
+# publish a GitHub Release with installers + packages + manifest.json.
+#
+# SignPath: the submission step is INERT until the project is approved
+# and the repo variables SIGNPATH_ORG_ID / SIGNPATH_PROJECT_SLUG are set
+# (plus the SIGNPATH_API_TOKEN secret). Unsigned releases keep working
+# exactly as before in the meantime (see CODE_SIGNING.md).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 1.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then V="${{ inputs.version }}";
+          else V="${GITHUB_REF_NAME#v}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building EsoAgent v$V"
+
+  build-windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Publish win-x64 (agent + tray + app + client + server)
+        shell: pwsh
+        run: |
+          $v = "${{ needs.version.outputs.version }}"
+          dotnet publish src/EsoAgent.Windows -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o payload --nologo -v q
+          dotnet publish src/EsoAgent.Tray -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o payload --nologo -v q
+          Copy-Item install/install.ps1, install/uninstall.ps1, install/update-apply.ps1 payload/
+          New-Item -ItemType Directory -Force dist | Out-Null
+          dotnet publish src/EsoAgent.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-app-windows --nologo -v q
+          dotnet publish src/EsoAgent.Client -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-client-windows --nologo -v q
+          dotnet publish src/EsoAgent.Server -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-server-windows --nologo -v q
+          "$v" | Out-File -NoNewline payload/esoagent-version.txt
+          Compress-Archive -Path payload/* -DestinationPath dist/esoagent-windows.zip
+      - name: Build the installer (Inno Setup)
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse payload installer/windows/payload
+          Copy-Item installer/windows/verify-install.ps1 installer/windows/
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\EsoAgent.iss /O"dist" 
+          Get-ChildItem dist
+      # SignPath Foundation submission — inert until approved/configured.
+      - name: Submit Windows binaries to SignPath (when configured)
+        if: ${{ vars.SIGNPATH_PROJECT_SLUG != '' }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.upload-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist/signed
+      - uses: actions/upload-artifact@v4
+        id: upload-setup
+        with:
+          name: windows-dist
+          path: |
+            dist/esoagent-windows.zip
+            dist/EsoAgent-Setup-*.exe
+            dist/pkg-app-windows
+            dist/pkg-client-windows
+            dist/pkg-server-windows
+
+  build-linux:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Publish linux-x64 set + packages
+        run: |
+          chmod +x scripts/publish.sh scripts/package-deb.sh
+          DOTNET=dotnet bash scripts/publish.sh
+          mkdir -p dist-linux
+          cp dist/esoagent-linux.zip dist/esoagent-server.zip dist/esoagent-client.zip dist/esoagent-app.zip dist-linux/
+          cp dist/*.deb dist-linux/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-dist
+          path: dist-linux/*
+
+  release:
+    needs: [version, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+          merge-multiple: true
+      - name: Assemble + sign the manifest
+        env:
+          ESO_RELEASE_PRIVATE_KEY: ${{ secrets.ESO_RELEASE_PRIVATE_KEY }}
+        run: |
+          mkdir -p final
+          find all -name "*.zip" -exec cp {} final/ \;
+          find all -name "*.deb" -exec cp {} final/ \;
+          find all -name "EsoAgent-Setup-*.exe" -exec cp {} final/ \;
+          if [ -n "$ESO_RELEASE_PRIVATE_KEY" ]; then
+            echo "$ESO_RELEASE_PRIVATE_KEY" > /tmp/release-private.pem
+            ESO_RELEASE_KEY_PATH=/tmp/release-private.pem \
+              python3 scripts/make-manifest.py final "${{ needs.version.outputs.version }}"
+            shred -u /tmp/release-private.pem
+          else
+            echo "No ESO_RELEASE_PRIVATE_KEY secret — manifest ships UNSIGNED (devices will refuse it; set the secret)"
+            python3 scripts/make-manifest.py final "${{ needs.version.outputs.version }}"
+          fi
+          ls -la final
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: EsoAgent v${{ needs.version.outputs.version }}
+          files: final/*
+          generate_release_notes: true

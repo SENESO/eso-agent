@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:EsoAgent.App.Views"
+        xmlns:app="using:EsoAgent.App"
+        x:Class="EsoAgent.App.MainWindow"
+        Title="EsoAgent — your machines, under your control" Width="1240" Height="780"
+        Icon="avares://EsoAgent.App/Assets/app-icon.png">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="OpenBrowserButton" Content="Open in browser" Click="OnOpenBrowserClick" IsEnabled="False" />
+                    <Button x:Name="RefreshDevicesButton" Content="Refresh devices" Click="OnRefreshClick" />
+                    <Button x:Name="LanguageButton" Content="العربية" Click="OnLanguageClick" />
+                    <Button x:Name="SettingsButton" Content="Settings" Click="OnSettingsClick" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Image Source="avares://EsoAgent.App/Assets/app-icon.png" Width="34" Height="34" VerticalAlignment="Center" />
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="EsoAgent" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock x:Name="ConfigStateText" Opacity="0.75" />
+                        <TextBlock x:Name="VersionText" Opacity="0.5" FontSize="11" />
+                    </StackPanel>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+        <TextBlock x:Name="StatusBarText" DockPanel.Dock="Bottom" Margin="12,6" Opacity="0.75" />
+        <ListBox x:Name="DevicesList" DockPanel.Dock="Left" Width="330" SelectionChanged="OnDeviceSelected">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="app:DeviceItem">
+                    <StackPanel Spacing="2" Margin="4">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding DetailLine}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="●" Foreground="LimeGreen" IsVisible="{Binding Online}" />
+                            <TextBlock Text="●" Foreground="Gray" IsVisible="{Binding !Online}" />
+                            <TextBlock Text="{Binding StatusLine}" FontSize="12" />
+                            <Border Background="DarkGoldenrod" CornerRadius="3" Padding="5,1" IsVisible="{Binding IsPending}">
+                                <TextBlock Text="PENDING" FontSize="11" Foreground="White" />
+                            </Border>
+                            <Border Background="DarkOrange" CornerRadius="3" Padding="5,1" IsVisible="{Binding ShowHealthWarn}">
+                                <TextBlock Text="⚠ HEALTH" FontSize="11" Foreground="White" />
+                            </Border>
+                            <Border Background="DarkRed" CornerRadius="3" Padding="5,1" IsVisible="{Binding ShowHealthFail}">
+                                <TextBlock Text="✖ HEALTH" FontSize="11" Foreground="White" />
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <TabControl x:Name="MainTabs" Margin="4">
+            <TabItem x:Name="StatusTabItem" Header="Status">
+                <v:StatusView x:Name="StatusTab" />
+            </TabItem>
+            <TabItem x:Name="DesktopTabItem" Header="Desktop">
+                <v:DesktopView x:Name="DesktopTab" />
+            </TabItem>
+            <TabItem x:Name="TerminalTabItem" Header="Terminal">
+                <v:TerminalView x:Name="TerminalTab" />
+            </TabItem>
+            <TabItem x:Name="FilesTabItem" Header="Files">
+                <v:FilesView x:Name="FilesTab" />
+            </TabItem>
+            <TabItem x:Name="ActivityTabItem" Header="Activity">
+                <v:ActivityView x:Name="ActivityTab" />
+            </TabItem>
+            <TabItem x:Name="AccessTabItem" Header="Access">
+                <v:AccessView x:Name="AccessTab" />
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EsoAgent.App.Views.SettingsWindow"
+        Title="EsoAgent — Connection settings" Width="560" Height="520"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,10">
+            <TextBlock Text="Client config (shared with the eso CLI):" Opacity="0.75" />
+            <TextBlock x:Name="PathText" FontFamily="Consolas, Menlo, monospace" TextWrapping="Wrap" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Spacing="8">
+            <TextBlock x:Name="ErrorText" Foreground="IndianRed" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Content="Cancel" Click="OnCancelClick" />
+                <Button Content="Save" Click="OnSaveClick" />
+            </StackPanel>
+        </StackPanel>
+        <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+            <TextBlock Grid.Row="0" Text="Device host" VerticalAlignment="Center" />
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="HostBox" Watermark="100.64.x.x or 127.0.0.1" />
+            <TextBlock Grid.Row="1" Text="Device port" VerticalAlignment="Center" />
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="PortBox" Watermark="8737" />
+            <TextBlock Grid.Row="2" Text="Cert fingerprint" VerticalAlignment="Center" />
+            <TextBox Grid.Row="2" Grid.Column="1" x:Name="FingerprintBox" Watermark="SHA-256 hex of the agent certificate" />
+            <TextBlock Grid.Row="3" Text="Device token" VerticalAlignment="Center" />
+            <TextBox Grid.Row="3" Grid.Column="1" x:Name="TokenBox" PasswordChar="•" Watermark="base64 token from the agent install" />
+            <TextBlock Grid.Row="4" Text="Fleet URL" VerticalAlignment="Center" />
+            <TextBox Grid.Row="4" Grid.Column="1" x:Name="FleetUrlBox" Watermark="https://host:8740 (optional)" />
+            <TextBlock Grid.Row="5" Text="Fleet fingerprint" VerticalAlignment="Center" />
+            <TextBox Grid.Row="5" Grid.Column="1" x:Name="FleetFingerprintBox" Watermark="SHA-256 hex of the fleet server certificate" />
+            <TextBlock Grid.Row="6" Text="Operator key file" VerticalAlignment="Center" />
+            <TextBox Grid.Row="6" Grid.Column="1" x:Name="OperatorKeyBox" Watermark="path to operator.key (from eso keygen)" />
+            <TextBlock Grid.Row="7" Grid.ColumnSpan="2" Opacity="0.7" TextWrapping="Wrap"
+                       Text="The direct fields are the one device you reach by IP (and the desktop target). The fleet fields list and relay to every enrolled device. The token is stored in this file only — it is never shown anywhere else." />
+        </Grid>
+    </DockPanel>
+</Window>

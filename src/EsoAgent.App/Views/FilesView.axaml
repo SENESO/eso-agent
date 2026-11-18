@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:EsoAgent.App.Views"
+             x:Class="EsoAgent.App.Views.FilesView">
+    <DockPanel Margin="10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button x:Name="UpButton" Content="↑ Up" DockPanel.Dock="Left" Click="OnUpClick" />
+            <Button x:Name="RefreshButton" Content="Refresh" DockPanel.Dock="Right" Margin="6,0,0,0" Click="OnRefreshClick" />
+            <TextBox x:Name="PathBox" Margin="6,0,0,0" KeyDown="OnPathKeyDown" />
+        </DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+            <Button x:Name="UploadButton" Content="Upload…" Click="OnUploadClick" />
+            <Button x:Name="DownloadButton" Content="Download…" Click="OnDownloadClick" />
+            <Button x:Name="DeleteButton" Content="Delete" Click="OnDeleteClick" />
+            <Button x:Name="RenameButton" Content="Rename…" Click="OnRenameClick" />
+            <Button x:Name="MkdirButton" Content="New folder…" Click="OnMkdirClick" />
+            <TextBlock x:Name="StateText" VerticalAlignment="Center" Opacity="0.75" />
+        </StackPanel>
+        <ListBox x:Name="EntriesList" DoubleTapped="OnEntryDoubleTapped">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="app:FileEntryItem">
+                    <TextBlock Text="{Binding Display}" Margin="4,2" />
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="EsoAgent.App.Views.TerminalView">
+    <DockPanel Margin="10">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <TextBlock Text="Shell:" VerticalAlignment="Center" />
+            <ComboBox x:Name="ShellBox" Width="130" />
+            <TextBlock x:Name="ModeText" VerticalAlignment="Center" Opacity="0.75" />
+            <Button x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" IsVisible="False" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+            <TextBox x:Name="InputBox" Width="640" Watermark="Type a command and press Enter"
+                     FontFamily="Consolas, Menlo, monospace" KeyDown="OnInputKeyDown" />
+            <Button x:Name="RunButton" Content="Run" Click="OnRunClick" />
+        </StackPanel>
+        <TextBox x:Name="OutputBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                 FontFamily="Consolas, Menlo, monospace" />
+    </DockPanel>
+</UserControl>

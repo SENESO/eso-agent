@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="EsoAgent.App.Views.AccessView">
+    <DockPanel Margin="10">
+        <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
+            <TextBlock Text="Hand this device to someone with a short access code — scoped, expiring, revocable. The code is shown ONCE."
+                       TextWrapping="Wrap" Opacity="0.8" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <CheckBox x:Name="ExecCheck" Content="Exec" IsChecked="True" />
+                <CheckBox x:Name="FilesCheck" Content="Files" IsChecked="True" />
+                <CheckBox x:Name="ClipboardCheck" Content="Clipboard" IsChecked="True" />
+                <CheckBox x:Name="TunnelsCheck" Content="Tunnels" />
+                <CheckBox x:Name="DesktopCheck" Content="Desktop" IsChecked="True" />
+                <CheckBox x:Name="ViewOnlyCheck" Content="View-only" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Minutes:" VerticalAlignment="Center" />
+                <TextBox x:Name="MinutesBox" Text="60" Width="70" />
+                <TextBlock Text="Uses (blank = ∞):" VerticalAlignment="Center" />
+                <TextBox x:Name="UsesBox" Width="70" />
+                <Button x:Name="CreateButton" Content="Create access code" Click="OnCreateClick" />
+                <Button x:Name="RefreshButton" Content="Refresh" Click="OnRefreshClick" />
+                <TextBlock x:Name="StateText" VerticalAlignment="Center" Opacity="0.75" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBox x:Name="CreatedCodeBox" IsReadOnly="True" Width="300" FontSize="16"
+                         Watermark="The new code appears here (once)" />
+                <TextBox x:Name="RevokeBox" Width="300" Watermark="Code or grant id to revoke" />
+                <Button x:Name="RevokeButton" Content="Revoke now" Click="OnRevokeClick" />
+            </StackPanel>
+        </StackPanel>
+        <TextBox x:Name="BodyText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                 FontFamily="Consolas, Menlo, monospace" FontSize="12" />
+    </DockPanel>
+</UserControl>

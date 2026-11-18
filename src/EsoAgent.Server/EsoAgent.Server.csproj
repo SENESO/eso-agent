@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>EsoAgent.Server</RootNamespace>
+    <AssemblyName>eso-server</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EsoAgent.Core\EsoAgent.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Fleet.html" />
+    <EmbeddedResource Include="FleetLogin.html" />
+  </ItemGroup>
+</Project>

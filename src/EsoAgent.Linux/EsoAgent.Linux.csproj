@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>EsoAgent.Linux</RootNamespace>
+    <AssemblyName>EsoAgent.Linux</AssemblyName>
+    <!-- Linux head: a systemd daemon supplying the platform services Core cannot
+         provide itself (battery, systemd units, distro package managers, ...).
+         Everything else — protocol, auth, endpoints — lives in EsoAgent.Core. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Lets the host register as a systemd service (Type=notify, watchdog, journal logging). -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EsoAgent.Core\EsoAgent.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Lets the test suite cover the internal desktop helpers (consent
+         prompt text, DPMS capability probe). -->
+    <InternalsVisibleTo Include="EsoAgent.Tests" />
+  </ItemGroup>
+</Project>

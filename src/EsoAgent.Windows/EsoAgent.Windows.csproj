@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>EsoAgent.Windows</RootNamespace>
+    <AssemblyName>EsoAgent.Windows</AssemblyName>
+    <!-- Windows head: the EsoAgent service (LocalSystem, session 0). Supplies the
+         Windows implementations of Core's platform abstractions and hosts the
+         shared Kestrel API from EsoAgent.Core as a Windows service. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EsoAgent.Core\EsoAgent.Core.csproj" />
+  </ItemGroup>
+</Project>

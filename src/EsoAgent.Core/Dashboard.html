@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%20%20%20%3C%21--%20EsoAgent%20golden%20wing%20%E2%80%94%20owner%20pick%202026-11-18.%20Generated%20by%20scripts%2Frender-brand.py%3B%20edit%20geometry%20there.%20--%3E%20%20%20%3Cdefs%3E%3ClinearGradient%20id%3D%22gold%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23F7DC8F%22%2F%3E%3Cstop%20offset%3D%220.45%22%20stop-color%3D%22%23E9BE57%22%2F%3E%3Cstop%20offset%3D%220.75%22%20stop-color%3D%22%23C9962E%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%239A7418%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%20%20%20%3Cg%20fill%3D%22url%28%23gold%29%22%3E%20%20%20%3Cpolygon%20points%3D%2220%2C52%2068%2C26%2058%2C36%2029%2C50%22%2F%3E%20%20%20%3Cpolygon%20points%3D%2228%2C54%2064%2C36%2054%2C48%2034%2C57%22%2F%3E%20%20%20%3Cpolygon%20points%3D%2235%2C59%2054%2C49%2048%2C60%2037%2C66%22%2F%3E%20%20%20%3Cpolygon%20points%3D%2236%2C67%2051%2C62%2046%2C69%2036%2C72%22%2F%3E%20%20%20%3Cpolygon%20points%3D%2221%2C54%2038%2C60%2034%2C79%22%2F%3E%20%20%20%3C%2Fg%3E%20%20%20%3Cg%20stroke%3D%22url%28%23gold%29%22%3E%20%20%20%3Cpath%20d%3D%22M%2056.4%2C41.0%20A%2013%2C13%200%200%201%2056.4%2C61.0%22%20fill%3D%22none%22%20stroke-width%3D%225.0%22%20stroke-linecap%3D%22round%22%2F%3E%20%20%20%3Cpath%20d%3D%22M%2062.8%2C33.4%20A%2023%2C23%200%200%201%2062.8%2C68.6%22%20fill%3D%22none%22%20stroke-width%3D%225.0%22%20stroke-linecap%3D%22round%22%2F%3E%20%20%20%3Cpath%20d%3D%22M%2069.2%2C25.7%20A%2033%2C33%200%200%201%2069.2%2C76.3%22%20fill%3D%22none%22%20stroke-width%3D%225.0%22%20stroke-linecap%3D%22round%22%2F%3E%20%20%20%3C%2Fg%3E%20%3C%2Fsvg%3E%20">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EsoAgent — Owner Panel</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3; --mut:#8b949e; --acc:#E3B341; --bad:#f85149; --ok:#3fb950; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); margin: 0; }
+  header { display:flex; align-items:center; gap:1rem; padding:.7rem 1rem; background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:1.05rem; margin:0; }
+  header .state { font-size:.85rem; color:var(--mut); }
+  header form { margin-left:auto; }
+  nav { display:flex; flex-wrap:wrap; gap:.4rem; padding:.6rem 1rem; border-bottom:1px solid var(--line); }
+  nav button { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:.45rem .8rem; cursor:pointer; }
+  nav button.active { border-color:var(--acc); color:var(--acc); }
+  main { padding:1rem; max-width:1100px; margin:0 auto; }
+  section { display:none; }
+  section.active { display:block; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.8rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem; }
+  .card h3 { margin:.1rem 0 .5rem; font-size:.85rem; color:var(--mut); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .card .big { font-size:1.3rem; font-weight:700; }
+  .card .small { color:var(--mut); font-size:.85rem; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  th, td { text-align:left; padding:.45rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; }
+  button.act { background:#21262d; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:.3rem .6rem; cursor:pointer; }
+  button.act:hover { border-color:var(--acc); }
+  button.danger:hover { border-color:var(--bad); color:var(--bad); }
+  button.primary { background:#E3B341; border-color:#E3B341; color:#141414; font-weight:600; }
+  input, select, textarea { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:.5rem; font:inherit; }
+  textarea { width:100%; min-height:110px; font-family:ui-monospace, monospace; }
+  pre.out { background:#010409; border:1px solid var(--line); border-radius:8px; padding:.8rem; white-space:pre-wrap; word-break:break-word; max-height:50vh; overflow:auto; font-size:.85rem; }
+  .row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:.7rem; }
+  .mut { color:var(--mut); } .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .banner { border:1px solid var(--bad); background:#3d1d1d; border-radius:8px; padding:.7rem .9rem; margin-bottom:.8rem; }
+  .banner.off { border-color:var(--ok); background:#12261a; }
+  code { font-family:ui-monospace, monospace; word-break:break-all; }
+  :focus-visible { outline:2px solid var(--acc); outline-offset:1px; }
+  button, input, select, textarea { transition:border-color .15s ease, background .15s ease; }
+  .brandmark { display:inline-flex; border-radius:8px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.45); }
+  header h1 { letter-spacing:.01em; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brandmark"><svg width="30" height="30" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">      <defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F7DC8F"/><stop offset="0.45" stop-color="#E9BE57"/><stop offset="0.75" stop-color="#C9962E"/><stop offset="1" stop-color="#9A7418"/></linearGradient></defs>   <g fill="url(#gold)">   <polygon points="20,52 68,26 58,36 29,50"/>   <polygon points="28,54 64,36 54,48 34,57"/>   <polygon points="35,59 54,49 48,60 37,66"/>   <polygon points="36,67 51,62 46,69 36,72"/>   <polygon points="21,54 38,60 34,79"/>   </g>   <g stroke="url(#gold)">   <path d="M 56.4,41.0 A 13,13 0 0 1 56.4,61.0" fill="none" stroke-width="5.0" stroke-linecap="round"/>   <path d="M 62.8,33.4 A 23,23 0 0 1 62.8,68.6" fill="none" stroke-width="5.0" stroke-linecap="round"/>   <path d="M 69.2,25.7 A 33,33 0 0 1 69.2,76.3" fill="none" stroke-width="5.0" stroke-linecap="round"/>   </g> </svg></span><h1>EsoAgent</h1>
+  <span class="state" id="hdrState">…</span>
+  <button class="act" id="langToggle" style="margin-left:auto">العربية</button>
+  <form method="post" action="/panel/logout" style="margin-left:0"><button class="act" type="submit" data-i18n="signOut">Sign out</button></form>
+</header>
+<nav id="tabs">
+  <button data-tab="overview" class="active" data-i18n="overview">Overview</button>
+  <button data-tab="processes" data-i18n="processes">Processes</button>
+  <button data-tab="software" data-i18n="software">Software</button>
+  <button data-tab="services" data-i18n="services">Services</button>
+  <button data-tab="run" data-i18n="run">Run</button>
+  <button data-tab="desktop" data-i18n="desktop">Desktop</button>
+  <button data-tab="files" data-i18n="files">Files</button>
+  <button data-tab="log" data-i18n="log">Log</button>
+  <button data-tab="access" data-i18n="access">Access</button>
+</nav>
+<main>
+  <section id="tab-overview" class="active"><div class="cards" id="ovCards"></div></section>
+
+  <section id="tab-processes">
+    <div class="row"><button class="act" id="procRefresh">Refresh</button><span class="mut" id="procCount"></span></div>
+    <table><thead><tr><th>PID</th><th>Name</th><th>Parent</th><th>Session</th><th>Memory</th><th></th></tr></thead><tbody id="procBody"></tbody></table>
+  </section>
+
+  <section id="tab-software">
+    <div class="row">
+      <select id="swKind"><option value="manager">Package id / name</option><option value="file">Installer file on this machine</option></select>
+      <input id="swId" placeholder="e.g. Microsoft.PowerToys or git" style="flex:1;min-width:200px">
+      <button class="act primary" id="swInstall">Install</button>
+      <button class="act" id="swUpgradeAll">Upgrade all</button>
+      <button class="act" id="swRefresh">Refresh</button>
+    </div>
+    <pre class="out" id="swOut" style="display:none"></pre>
+    <table><thead><tr><th>Name</th><th>Version</th><th>Publisher</th><th>Id</th><th></th></tr></thead><tbody id="swBody"></tbody></table>
+  </section>
+
+  <section id="tab-services">
+    <div class="row"><button class="act" id="svcRefresh">Refresh</button></div>
+    <table><thead><tr><th>Name</th><th>Display name</th><th>Status</th><th>Startup</th><th></th></tr></thead><tbody id="svcBody"></tbody></table>
+  </section>
+
+  <section id="tab-run">
+    <div class="row">
+      <select id="runShell">
+        <option value="default">Default shell</option>
+        <option value="powershell">PowerShell</option>
+        <option value="pwsh">PowerShell Core (pwsh)</option>
+        <option value="cmd">cmd.exe</option>
+        <option value="bash">bash</option>
+        <option value="sh">sh</option>
+      </select>
+      <button class="act primary" id="runBtn">Run</button>
+      <span class="mut">Runs with the agent service's full privileges — your machine, your shell.</span>
+    </div>
+    <textarea id="runScript" placeholder="Type a command or script…"></textarea>
+    <pre class="out" id="runOut" style="display:none"></pre>
+  </section>
+
+  <section id="tab-desktop">
+    <div class="row">
+      <select id="dtMode"><option value="View">View only</option><option value="Control" selected>Control</option></select>
+      <select id="dtQuality"><option value="40">Quality: low</option><option value="60" selected>Quality: balanced</option><option value="85">Quality: high</option></select>
+      <select id="dtMonitor"></select>
+      <label class="mut"><input type="checkbox" id="dtRecord"> Record session</label>
+      <button class="act primary" id="dtStart">Start session</button>
+      <button class="act danger" id="dtStop" disabled>Stop</button>
+      <button class="act" id="dtCad" disabled>Ctrl+Alt+Del</button>
+      <button class="act" id="dtPrivacy" disabled>Privacy: off</button>
+      <span class="mut" id="dtState">No session. The person at the machine sees an on-screen indicator while a session is live.</span>
+    </div>
+    <div class="mut" style="margin-bottom:.5rem">Click the screen to give it keyboard focus in Control mode. SAS (Ctrl+Alt+Del) on Windows may be blocked by OS policy — see README.</div>
+    <canvas id="dtCanvas" width="960" height="540" tabindex="0" style="width:100%;background:#000;border:1px solid var(--line);border-radius:8px;outline:none"></canvas>
+    <div class="row" style="margin-top:.5rem">
+      <input id="dtChatIn" placeholder="Message the person at this machine…" style="flex:1;min-width:200px">
+      <button class="act" id="dtChatSend" disabled>Send chat</button>
+    </div>
+    <pre class="out" id="dtChatLog" style="display:none;max-height:18vh"></pre>
+  </section>
+
+  <section id="tab-files">
+    <div class="row">
+      <input id="filePath" style="flex:1;min-width:220px" placeholder="Directory path">
+      <button class="act" id="fileGo">Open</button>
+      <button class="act" id="fileUp">↑ Parent</button>
+      <label class="act" style="cursor:pointer">Upload here <input type="file" id="fileUpload" style="display:none"></label>
+    </div>
+    <div class="mut" id="fileMsg"></div>
+    <table><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="fileBody"></tbody></table>
+    <h3 style="margin-top:1.2rem">Session recordings (.esorec)</h3>
+    <div class="row"><button class="act" id="recRefresh">Refresh recordings</button><span class="mut">Frames recorded on THIS device when a session opts in. JSON-lines format — see USER-GUIDE.</span></div>
+    <table><thead><tr><th>File</th><th>Started</th><th>Size</th><th>Codec</th><th></th></tr></thead><tbody id="recBody"></tbody></table>
+  </section>
+
+  <section id="tab-log">
+    <div class="row">
+      <input id="logFilter" placeholder="Filter (substring)" style="flex:1;min-width:180px">
+      <select id="logLines"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select>
+      <button class="act" id="logRefresh">Refresh</button>
+    </div>
+    <pre class="out" id="logOut"></pre>
+  </section>
+
+  <section id="tab-access">
+    <div id="accessBanner"></div>
+    <div class="cards">
+      <div class="card"><h3>API access (the assistant)</h3><div class="big" id="accState">…</div>
+        <p class="small">Pause cuts the assistant's API access instantly. You keep full control here — the panel is never paused.</p>
+        <div class="row"><button class="act danger" id="accPause">Pause API access</button><button class="act" id="accResume">Resume</button></div></div>
+      <div class="card"><h3>API token</h3>
+        <p class="small">Rotating issues a new token and kills the old one instantly. The new token is shown once — copy it and hand it to the assistant through a secure channel.</p>
+        <button class="act danger" id="accRotate">Rotate token</button>
+        <p><code id="accNewToken"></code></p></div>
+      <div class="card"><h3>Certificate fingerprint (SHA-256)</h3><p><code id="accFp">…</code></p>
+        <p class="small">The client pins this fingerprint. If it ever changes unexpectedly, treat it as a red flag.</p></div>
+      <div class="card"><h3>Two-factor auth (TOTP)</h3><div class="big" id="accTotpState">…</div>
+        <p class="small">Owner-only. When enabled, signing in here needs a 6-digit authenticator code as a second step.</p>
+        <div class="row"><button class="act" id="accTotpBegin">Set up 2FA</button></div>
+        <div id="accTotpBox" style="display:none">
+          <p class="small">Add this secret to your authenticator app, then confirm with the current code:</p>
+          <p><code id="accTotpSecret"></code></p>
+          <div class="row"><input id="accTotpCode" placeholder="6-digit code" style="width:9rem"><button class="act primary" id="accTotpConfirm">Confirm</button></div>
+        </div>
+        <div class="row"><input type="password" id="accTotpPw" placeholder="Password (to disable)"><button class="act danger" id="accTotpDisable">Disable 2FA</button></div>
+        <p class="small" id="accTotpMsg"></p></div>
+      <div class="card"><h3>Device policy</h3>
+        <p class="small">Per-capability switches the agent enforces for everyone (operator included). The owner panel itself is never gated. Consent asks the person at this machine before a desktop session starts.</p>
+        <label class="small" style="display:block"><input type="checkbox" id="polFiles"> File transfer</label>
+        <label class="small" style="display:block"><input type="checkbox" id="polClipboard"> Clipboard sync</label>
+        <label class="small" style="display:block"><input type="checkbox" id="polTunnels"> Tunnels</label>
+        <label class="small" style="display:block"><input type="checkbox" id="polDesktop"> Desktop control (off = view-only)</label>
+        <label class="small" style="display:block"><input type="checkbox" id="polConsentControl"> Control sessions need local consent</label>
+        <label class="small" style="display:block"><input type="checkbox" id="polConsentView"> View sessions need local consent</label>
+        <div class="row" style="margin-top:.5rem"><button class="act primary" id="polSave">Save policy</button><span class="small" id="polMsg"></span></div></div>
+      <div class="card"><h3>Owner password</h3>
+        <p class="small">Owner-reserved: only you, here, can change it. The operator key can never touch it.</p>
+        <div class="row"><input type="password" id="pwCurrent" placeholder="Current password" autocomplete="current-password"></div>
+        <div class="row"><input type="password" id="pwNew" placeholder="New password (min 8 chars)" autocomplete="new-password"></div>
+        <button class="act" id="accChangePw">Change password</button>
+        <p class="small" id="pwMsg"></p></div>
+    </div>
+  </section>
+</main>
+
+<script>
+let CSRF = '';
+const $ = id => document.getElementById(id);
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers || {});
+  if (opts.method && opts.method !== 'GET') opts.headers['X-CSRF'] = CSRF;
+  if (opts.json) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+  const r = await fetch(path, opts);
+  if (r.status === 401) { location.href = '/panel/login'; throw new Error('login'); }
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { return t; }
+}
+function fmtBytes(n) { if (n == null) return '—'; const u=['B','KB','MB','GB','TB']; let i=0; while (n>=1024&&i<4){n/=1024;i++;} return n.toFixed(1)+' '+u[i]; }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('main section').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  $('tab-' + b.dataset.tab).classList.add('active');
+  ({overview: loadOverview, processes: loadProcesses, software: loadSoftware, services: loadServices, files: () => { loadFiles($('filePath').value); loadRecordings(); }, log: loadLog, access: loadAccess}[b.dataset.tab] || (()=>{}))();
+});
+
+async function loadOverview() {
+  const s = await api('/panel/api/status');
+  $('hdrState').textContent = s.hostname + ' · ' + s.os;
+  const ram = s.ramTotalBytes ? Math.round(100 * s.ramUsedBytes / s.ramTotalBytes) + '% of ' + fmtBytes(s.ramTotalBytes) : '—';
+  const batt = s.battery && s.battery.present ? (s.battery.percent ?? '?') + '% · ' + (s.battery.onAc ? 'AC' : 'battery') : 'No battery';
+  const disks = (s.disks || []).map(d => `<div class="card"><h3>Disk ${esc(d.name)}</h3><div class="big">${fmtBytes(d.freeBytes)} free</div><div class="small">of ${fmtBytes(d.totalBytes)}</div></div>`).join('');
+  $('ovCards').innerHTML = `
+    <div class="card"><h3>System</h3><div class="big">${esc(s.os)}</div><div class="small">${esc(s.osDescription)}</div></div>
+    <div class="card"><h3>CPU</h3><div class="big">${s.cpuPercent == null ? '—' : s.cpuPercent.toFixed(1) + '%'}</div></div>
+    <div class="card"><h3>RAM</h3><div class="big">${ram}</div></div>
+    <div class="card"><h3>Battery</h3><div class="big">${batt}</div></div>
+    <div class="card"><h3>Uptime</h3><div class="big">${Math.floor(s.uptimeSeconds/3600)}h ${Math.floor(s.uptimeSeconds%3600/60)}m</div></div>
+    <div class="card"><h3>Agent</h3><div class="big">v${esc(s.agentVersion)}</div><div class="small">Tailnet: ${esc((s.tailnetIps||[]).join(', ') || '—')} · API access: ${s.locked ? '<span class="bad">PAUSED</span>' : '<span class="ok">active</span>'}</div></div>
+    ${disks}`;
+}
+
+async function loadProcesses() {
+  const list = await api('/panel/api/processes');
+  $('procCount').textContent = list.length + ' processes';
+  $('procBody').innerHTML = list.map(p => `<tr><td>${p.pid}</td><td>${esc(p.name)}</td><td>${p.parentPid}</td><td>${p.sessionId}</td><td>${fmtBytes(p.workingSetBytes)}</td>
+    <td><button class="act danger" onclick="killProc(${p.pid})">Kill</button></td></tr>`).join('');
+}
+async function killProc(pid) {
+  if (!confirm('Kill process ' + pid + '?')) return;
+  await api('/panel/api/processes/' + pid + '/kill', {method: 'POST'});
+  loadProcesses();
+}
+$('procRefresh').onclick = loadProcesses;
+
+async function loadSoftware() {
+  const list = await api('/panel/api/software');
+  $('swBody').innerHTML = list.map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.version)}</td><td>${esc(p.publisher)}</td><td><code>${esc(p.id)}</code></td>
+    <td><button class="act" onclick="swUpgrade('${esc(p.id || p.name)}')">Upgrade</button> <button class="act danger" onclick="swUninstall('${esc(p.name)}')">Uninstall</button></td></tr>`).join('');
+}
+function showSw(r) { const o = $('swOut'); o.style.display = 'block'; o.textContent = (r.message || '') + '\n' + (r.output || '') + '\n[success=' + r.success + ' verified=' + r.verified + ']'; }
+async function swInstall() {
+  const kind = $('swKind').value, v = $('swId').value.trim();
+  if (!v) return;
+  showSw(await api('/panel/api/software/install', {method: 'POST', json: kind === 'file' ? {kind, path: v} : {kind, id: v}}));
+  loadSoftware();
+}
+async function swUninstall(name) { if (!confirm('Uninstall ' + name + '?')) return; showSw(await api('/panel/api/software/uninstall', {method: 'POST', json: {name}})); loadSoftware(); }
+async function swUpgrade(id) { showSw(await api('/panel/api/software/upgrade', {method: 'POST', json: {id}})); loadSoftware(); }
+$('swInstall').onclick = swInstall;
+$('swUpgradeAll').onclick = async () => { showSw(await api('/panel/api/software/upgrade', {method: 'POST', json: {}})); loadSoftware(); };
+$('swRefresh').onclick = loadSoftware;
+
+async function loadServices() {
+  const list = await api('/panel/api/services');
+  $('svcBody').innerHTML = list.map(s => `<tr><td>${esc(s.name)}</td><td>${esc(s.displayName)}</td><td>${esc(s.status)}</td><td>${esc(s.startupMode)}</td>
+    <td><button class="act" onclick="svc('${esc(s.name)}','start')">Start</button> <button class="act" onclick="svc('${esc(s.name)}','stop')">Stop</button> <button class="act" onclick="svc('${esc(s.name)}','restart')">Restart</button></td></tr>`).join('');
+}
+async function svc(name, verb) { await api('/panel/api/services/' + encodeURIComponent(name) + '/' + verb, {method: 'POST'}); setTimeout(loadServices, 600); }
+$('svcRefresh').onclick = loadServices;
+
+$('runBtn').onclick = async () => {
+  const o = $('runOut'); o.style.display = 'block'; o.textContent = 'Running…';
+  const r = await api('/panel/api/run', {method: 'POST', json: {mode: 'shell', shell: $('runShell').value, script: $('runScript').value, timeoutMs: 300000}});
+  o.textContent = (r.stdout || '') + (r.stderr ? '\n[stderr]\n' + r.stderr : '') + '\n[exit ' + (r.exitCode ?? (r.timedOut ? 'timeout' : '?')) + ']';
+};
+
+let fileParent = null;
+async function loadFiles(path) {
+  const r = await api('/panel/api/files/list' + (path ? '?path=' + encodeURIComponent(path) : ''));
+  if (r.error) { $('fileMsg').textContent = r.error; return; }
+  $('filePath').value = r.path; fileParent = r.parent; $('fileMsg').textContent = '';
+  $('fileBody').innerHTML = r.entries.map(e => `<tr><td>${e.isDir ? '📁' : '📄'} ${e.isDir ? `<a href="#" onclick="loadFiles('${esc(e.path).replace(/\\/g,'\\\\')}');return false" style="color:var(--acc)">${esc(e.name)}</a>` : esc(e.name)}</td>
+    <td>${e.isDir ? '' : fmtBytes(e.size)}</td>
+    <td>${e.isDir ? '' : `<a class="act" style="text-decoration:none;padding:.3rem .6rem;border:1px solid var(--line);border-radius:6px" href="/panel/api/files/download?path=${encodeURIComponent(e.path)}">Download</a>`}</td></tr>`).join('');
+}
+$('fileGo').onclick = () => loadFiles($('filePath').value);
+$('fileUp').onclick = () => { if (fileParent) loadFiles(fileParent); };
+$('fileUpload').onchange = async ev => {
+  const file = ev.target.files[0]; if (!file) return;
+  const dir = $('filePath').value.replace(/[\\/]+$/, '');
+  const target = dir + (dir.includes('\\') ? '\\' : '/') + file.name;
+  $('fileMsg').textContent = 'Uploading ' + file.name + '…';
+  const buf = await file.arrayBuffer();
+  const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+  const sha = [...new Uint8Array(hashBuf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  let r = await api('/panel/api/files/begin', {method: 'POST', json: {path: target}});
+  let off = r.received || 0;
+  const CH = 1024 * 1024;
+  while (off < buf.byteLength) {
+    const chunk = buf.slice(off, off + CH);
+    const res = await fetch('/panel/api/files/chunk?path=' + encodeURIComponent(target) + '&offset=' + off,
+      {method: 'PUT', headers: {'X-CSRF': CSRF, 'Content-Type': 'application/octet-stream'}, body: chunk});
+    const j = await res.json(); off = j.received;
+  }
+  r = await api('/panel/api/files/commit', {method: 'POST', json: {path: target, sha256: sha}});
+  $('fileMsg').textContent = r.sha256 ? 'Uploaded ✓ ' + file.name : ('Upload failed: ' + (r.error || ''));
+  loadFiles(dir);
+};
+
+async function loadLog() {
+  const r = await api('/panel/api/logs?lines=' + $('logLines').value + '&filter=' + encodeURIComponent($('logFilter').value));
+  $('logOut').textContent = (r.lines || []).join('\n');
+}
+$('logRefresh').onclick = loadLog;
+
+async function loadAccess() {
+  const a = await api('/panel/api/access');
+  $('accState').textContent = a.locked ? 'PAUSED' : 'Active';
+  $('accState').className = 'big ' + (a.locked ? 'bad' : 'ok');
+  $('accFp').textContent = a.fingerprint;
+  $('accessBanner').innerHTML = a.locked ? '<div class="banner">API access is PAUSED. The assistant cannot reach this machine until you resume.</div>' : '';
+  $('hdrState').textContent = ($('hdrState').textContent.split('·')[0] || '') + ' · v' + a.version;
+  $('accTotpState').textContent = a.totpEnabled ? 'Enabled' : 'Off';
+  $('accTotpState').className = 'big ' + (a.totpEnabled ? 'ok' : '');
+  if (a.capabilities) {
+    $('polFiles').checked = !!a.capabilities.files;
+    $('polClipboard').checked = !!a.capabilities.clipboard;
+    $('polTunnels').checked = !!a.capabilities.tunnels;
+    $('polDesktop').checked = !!a.capabilities.desktopControl;
+  }
+  if (a.desktopPolicy) {
+    $('polConsentControl').checked = !!a.desktopPolicy.controlConsent;
+    $('polConsentView').checked = !!a.desktopPolicy.viewConsent;
+  }
+}
+
+// ----- 2FA + policy (v1.2) -----
+$('accTotpBegin').onclick = async () => {
+  const r = await api('/panel/api/access/2fa/begin', {method: 'POST'});
+  if (r.error) { $('accTotpMsg').textContent = 'Failed: ' + r.error; return; }
+  $('accTotpSecret').textContent = r.secret + '   (' + r.otpauthUri + ')';
+  $('accTotpBox').style.display = 'block';
+};
+$('accTotpConfirm').onclick = async () => {
+  const r = await api('/panel/api/access/2fa/confirm', {method: 'POST', json: {code: $('accTotpCode').value.trim()}});
+  $('accTotpMsg').textContent = r.enabled ? '2FA enabled ✓' : ('Failed: ' + (r.error || ''));
+  if (r.enabled) { $('accTotpBox').style.display = 'none'; loadAccess(); }
+};
+$('accTotpDisable').onclick = async () => {
+  const r = await api('/panel/api/access/2fa/disable', {method: 'POST', json: {currentPassword: $('accTotpPw').value}});
+  $('accTotpMsg').textContent = r.enabled === false ? '2FA disabled ✓' : ('Failed: ' + (r.error || ''));
+  loadAccess();
+};
+$('polSave').onclick = async () => {
+  const r = await api('/panel/api/access/policy', {method: 'POST', json: {
+    capabilities: {files: $('polFiles').checked, clipboard: $('polClipboard').checked, tunnels: $('polTunnels').checked, desktopControl: $('polDesktop').checked},
+    desktopPolicy: {controlConsent: $('polConsentControl').checked, viewConsent: $('polConsentView').checked, consentTimeoutSeconds: 30},
+  }});
+  $('polMsg').textContent = r.error ? ('Failed: ' + r.error) : 'Saved ✓ (applies immediately)';
+};
+
+// ----- recordings (v1.2) -----
+async function loadRecordings() {
+  const recs = await api('/panel/api/recordings');
+  $('recBody').innerHTML = (recs || []).map(r => `<tr>
+    <td><code>${esc(r.name)}</code></td>
+    <td>${esc((r.startedAt || '').replace('T', ' ').slice(0, 19))}</td>
+    <td>${r.sizeBytes}</td><td>${esc(r.codec)} ${r.width}×${r.height}</td>
+    <td><a class="act" style="text-decoration:none;padding:.3rem .6rem;border:1px solid var(--line);border-radius:6px;color:var(--txt)" href="/panel/api/recordings/${encodeURIComponent(r.name)}">Download</a>
+        <button class="act danger" onclick="delRecording('${esc(r.name)}')">Delete</button></td></tr>`).join('');
+}
+window.delRecording = async name => {
+  if (!confirm('Delete recording ' + name + '?')) return;
+  await api('/panel/api/recordings/' + encodeURIComponent(name) + '/delete', {method: 'POST'});
+  loadRecordings();
+};
+$('recRefresh').onclick = loadRecordings;
+$('accPause').onclick = async () => { await api('/panel/api/access/pause', {method: 'POST'}); loadAccess(); loadOverview(); };
+$('accResume').onclick = async () => { await api('/panel/api/access/resume', {method: 'POST'}); loadAccess(); loadOverview(); };
+$('accChangePw').onclick = async () => {
+  const r = await api('/panel/api/access/change-password', {method: 'POST', json: {currentPassword: $('pwCurrent').value, newPassword: $('pwNew').value}});
+  $('pwMsg').textContent = r.changed ? 'Password changed ✓' : ('Failed: ' + (r.error || 'unknown'));
+  if (r.changed) { $('pwCurrent').value = ''; $('pwNew').value = ''; }
+};
+$('accRotate').onclick = async () => {
+  if (!confirm('Rotate the API token? The old token stops working immediately.')) return;
+  const r = await api('/panel/api/access/rotate-token', {method: 'POST'});
+  $('accNewToken').textContent = r.token || '(error)';
+};
+
+// ----- i18n (EN/AR, RTL for Arabic) -----
+const I18N = {
+  en: { signOut: 'Sign out', overview: 'Overview', processes: 'Processes', software: 'Software', services: 'Services', run: 'Run', desktop: 'Desktop', files: 'Files', log: 'Log', access: 'Access' },
+  ar: { signOut: 'تسجيل الخروج', overview: 'نظرة عامة', processes: 'العمليات', software: 'البرامج', services: 'الخدمات', run: 'تشغيل', desktop: 'سطح المكتب', files: 'الملفات', log: 'السجل', access: 'الوصول' },
+};
+let lang = localStorage.getItem('eso-lang') || 'en';
+function applyLang() {
+  const dict = I18N[lang] || I18N.en;
+  document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.dataset.i18n; if (dict[k]) el.textContent = dict[k]; });
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  $('langToggle').textContent = lang === 'ar' ? 'English' : 'العربية';
+}
+$('langToggle').onclick = () => { lang = lang === 'ar' ? 'en' : 'ar'; localStorage.setItem('eso-lang', lang); applyLang(); };
+
+// ----- remote desktop -----
+let dtWs = null, dtCodec = 'jpeg', dtMode = 'View', dtOff = null, dtOffCtx = null, dtPrivacy = false;
+const dtCanvas = $('dtCanvas'), dtCtx = dtCanvas.getContext('2d');
+function dtSend(obj) { if (dtWs && dtWs.readyState === 1) dtWs.send(JSON.stringify(obj)); }
+async function dtDrawRawDiff(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const dv = new DataView(bytes.buffer);
+  const w = dv.getUint16(3, true), h = dv.getUint16(5, true), tile = dv.getUint16(7, true), count = dv.getUint32(9, true);
+  if (!dtOff || dtOff.width !== w || dtOff.height !== h) { dtOff = document.createElement('canvas'); dtOff.width = w; dtOff.height = h; dtOffCtx = dtOff.getContext('2d'); }
+  const inflated = await new Response(new Blob([bytes.slice(13)]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer();
+  const data = new Uint8Array(inflated);
+  const cols = Math.ceil(w / tile);
+  let pos = 0;
+  for (let t = 0; t < count; t++) {
+    const idx = new DataView(data.buffer, data.byteOffset + pos, 4).getUint32(0, true); pos += 4;
+    const tx = (idx % cols) * tile, ty = Math.floor(idx / cols) * tile;
+    const tw = Math.min(tile, w - tx), th = Math.min(tile, h - ty);
+    const img = dtOffCtx.createImageData(tw, th);
+    for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+      const s = pos + (y * tw + x) * 4, d = (y * tw + x) * 4;
+      img.data[d] = data[s + 2]; img.data[d + 1] = data[s + 1]; img.data[d + 2] = data[s]; img.data[d + 3] = 255;
+    }
+    pos += tw * th * 4;
+    dtOffCtx.putImageData(img, tx, ty);
+  }
+  if (dtCanvas.width !== w) { dtCanvas.width = w; dtCanvas.height = h; }
+  dtCtx.drawImage(dtOff, 0, 0);
+}
+$('dtStart').onclick = () => {
+  dtMode = $('dtMode').value;
+  dtWs = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/panel/desktop');
+  dtWs.onopen = () => dtSend({type: 'hello', mode: dtMode, codecs: ['jpeg', 'rawdiff'], monitor: parseInt($('dtMonitor').value || '0'), quality: parseInt($('dtQuality').value), maxFps: 12, record: $('dtRecord').checked});
+  dtWs.onmessage = async ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'welcome') {
+      if (msg.error) { $('dtState').textContent = 'Unavailable: ' + msg.error; dtWs.close(); return; }
+      dtCodec = msg.codec;
+      $('dtMonitor').innerHTML = (msg.monitors || []).map(m => `<option value="${m.index}">${esc(m.name)} (${m.width}×${m.height})</option>`).join('');
+      dtCanvas.width = msg.width; dtCanvas.height = msg.height;
+      $('dtState').textContent = 'Live · ' + msg.mode + ' · ' + msg.codec + (msg.recording ? ' · ● recording to ' + msg.recording : '');
+      $('dtPrivacy').disabled = false; $('dtChatSend').disabled = false;
+      $('dtStart').disabled = true; $('dtStop').disabled = false; $('dtCad').disabled = dtMode !== 'Control';
+    } else if (msg.type === 'frame') {
+      if (msg.codec === 'jpeg') {
+        const bin = Uint8Array.from(atob(msg.data), c => c.charCodeAt(0));
+        const bmp = await createImageBitmap(new Blob([bin], {type: 'image/jpeg'}));
+        if (dtCanvas.width !== bmp.width) { dtCanvas.width = bmp.width; dtCanvas.height = bmp.height; }
+        dtCtx.drawImage(bmp, 0, 0); bmp.close();
+      } else { await dtDrawRawDiff(msg.data); }
+    } else if (msg.type === 'clipboard') {
+      try { await navigator.clipboard.writeText(msg.text); } catch {}
+    } else if (msg.type === 'chat') {
+      const log = $('dtChatLog'); log.style.display = 'block';
+      log.textContent += 'device: ' + msg.text + '\n';
+    } else if (msg.type === 'privacy') {
+      dtPrivacy = !!msg.enabled;
+      $('dtPrivacy').textContent = dtPrivacy ? 'Privacy: ON' : 'Privacy: off';
+    } else if (msg.type === 'close') {
+      $('dtState').textContent = 'Session ended: ' + (msg.reason || '');
+      $('dtStart').disabled = false; $('dtStop').disabled = true; $('dtCad').disabled = true;
+    }
+  };
+  dtWs.onclose = () => { $('dtStart').disabled = false; $('dtStop').disabled = true; $('dtCad').disabled = true; $('dtPrivacy').disabled = true; $('dtChatSend').disabled = true; };
+};
+$('dtStop').onclick = () => { dtSend({type: 'close'}); if (dtWs) dtWs.close(); };
+$('dtPrivacy').onclick = () => dtSend({type: 'privacy', enabled: !dtPrivacy});
+$('dtChatSend').onclick = () => {
+  const text = $('dtChatIn').value.trim(); if (!text) return;
+  $('dtChatIn').value = '';
+  const log = $('dtChatLog'); log.style.display = 'block';
+  log.textContent += 'you: ' + text + '\n';
+  dtSend({type: 'chat', text, from: 'owner'});
+};
+$('dtCad').onclick = () => { dtSend({type: 'input', kind: 'key', key: 'ctrl+alt+delete', down: true}); dtSend({type: 'input', kind: 'key', key: 'ctrl+alt+delete', down: false}); };
+function dtPos(ev) { const r = dtCanvas.getBoundingClientRect(); return {x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height}; }
+let dtLastMove = 0;
+dtCanvas.addEventListener('mousemove', ev => { const n = Date.now(); if (n - dtLastMove < 33) return; dtLastMove = n; const p = dtPos(ev); dtSend({type: 'input', kind: 'mouseMove', x: p.x, y: p.y}); });
+dtCanvas.addEventListener('mousedown', ev => { const p = dtPos(ev); dtSend({type: 'input', kind: 'mouseButton', button: ['left','middle','right'][ev.button] || 'left', down: true, x: p.x, y: p.y}); });
+dtCanvas.addEventListener('mouseup', ev => { const p = dtPos(ev); dtSend({type: 'input', kind: 'mouseButton', button: ['left','middle','right'][ev.button] || 'left', down: false, x: p.x, y: p.y}); });
+dtCanvas.addEventListener('wheel', ev => { ev.preventDefault(); dtSend({type: 'input', kind: 'wheel', delta: Math.sign(ev.deltaY) * -120}); }, {passive: false});
+dtCanvas.addEventListener('contextmenu', ev => ev.preventDefault());
+dtCanvas.addEventListener('keydown', ev => { ev.preventDefault(); dtSend({type: 'input', kind: 'key', key: ev.key, down: true, ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}); });
+dtCanvas.addEventListener('keyup', ev => { ev.preventDefault(); dtSend({type: 'input', kind: 'key', key: ev.key, down: false, ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}); });
+
+(async () => {
+  const s = await api('/panel/api/session');
+  CSRF = s.csrf;
+  applyLang();
+  loadOverview();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EsoAgent — every machine you own, under your control</title>
+<meta name="description" content="EsoAgent is a self-hosted fleet remote-administration platform: remote desktop, shell, mesh networking, and an operator-grade perception stack — one product, signed end to end.">
+<link rel="icon" type="image/png" href="assets/app-icon-256.png">
+<style>
+  /* EsoAgent project site — soft light scheme (owner's direction,
+     2026-11-18): warm off-white and soft sand, soft slate text, and
+     gold only as a thin accent thread. The golden-wing mark keeps its
+     matte-black tile — presented on the sand like a set stone.
+     The PRODUCT UI (app + panels) keeps the dark golden-wing theme;
+     this palette governs the websites only. */
+  :root {
+    --bg: #faf7f1;
+    --sand: #f3eddf;
+    --sand2: #efe7d6;
+    --panel: #fffdf9;
+    --line: #e4dccb;
+    --line2: #d9cfb8;
+    --ink: #232b36;
+    --txt: #37414e;
+    --mut: #717a87;
+    --gold: #a97f14;
+    --gold-bright: #e3b341;
+    --gold-deep: #8a680e;
+    --shadow: 0 1px 2px rgba(84, 66, 18, .05), 0 10px 30px rgba(84, 66, 18, .06);
+    --shadow-lift: 0 2px 4px rgba(84, 66, 18, .06), 0 16px 40px rgba(84, 66, 18, .10);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    color: var(--txt);
+    font-family: "Segoe UI", Inter, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.68; -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(900px 420px at 85% -120px, rgba(227, 179, 65, .10), transparent 65%),
+      radial-gradient(700px 380px at -10% 30%, rgba(227, 179, 65, .06), transparent 60%),
+      var(--bg);
+  }
+  a { color: var(--gold-deep); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- header ---- */
+  header.site {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(250, 247, 241, .9); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  header.site .wrap { display: flex; align-items: center; gap: 12px; padding-top: 11px; padding-bottom: 11px; }
+  header.site img.mark { width: 32px; height: 32px; border-radius: 8px; box-shadow: 0 2px 8px rgba(35, 43, 54, .25); }
+  header.site .name { font-size: 18.5px; font-weight: 700; color: var(--ink); letter-spacing: .01em; }
+  header.site .name small { display: block; font-size: 10.5px; font-weight: 600; color: var(--mut); letter-spacing: .14em; text-transform: uppercase; line-height: 1.1; }
+  header.site nav { margin-inline-start: auto; display: flex; gap: 24px; align-items: center; font-size: 14.5px; }
+  header.site nav a { color: var(--txt); }
+  header.site nav a:hover { color: var(--gold-deep); text-decoration: none; }
+  #langBtn {
+    background: var(--panel); color: var(--txt); border: 1px solid var(--line2);
+    border-radius: 999px; padding: 5px 14px; cursor: pointer; font-size: 13.5px; font-family: inherit;
+  }
+  #langBtn:hover { border-color: var(--gold-bright); }
+
+  /* ---- hero ---- */
+  .hero {
+    text-align: center; padding: 78px 0 58px; position: relative;
+    background:
+      radial-gradient(560px 240px at 50% 0%, rgba(227, 179, 65, .12), transparent 70%),
+      linear-gradient(var(--bg), var(--bg));
+  }
+  .hero::before {  /* fine dotted texture, very quiet */
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+    background-image: radial-gradient(rgba(169, 127, 20, .10) 1px, transparent 1.4px);
+    background-size: 26px 26px;
+    mask-image: linear-gradient(180deg, black, transparent 78%);
+    -webkit-mask-image: linear-gradient(180deg, black, transparent 78%);
+  }
+  .hero .wrap { position: relative; }
+  .hero img.mark {
+    width: 120px; height: 120px; border-radius: 27px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 18px 44px rgba(35, 43, 54, .28), 0 4px 12px rgba(35, 43, 54, .18);
+  }
+  .hero .eyebrow {
+    margin-top: 30px; font-size: 12px; font-weight: 700; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--gold);
+  }
+  .hero h1 { font-size: 45px; line-height: 1.16; font-weight: 800; letter-spacing: -.015em; color: var(--ink); margin: 12px 0 0; }
+  .hero h1 .gold { color: var(--gold); }
+  .thread { width: 74px; height: 3px; border-radius: 2px; margin: 24px auto 0;
+    background: linear-gradient(90deg, transparent, var(--gold-bright) 22%, var(--gold) 50%, var(--gold-bright) 78%, transparent); }
+  .hero .pitch { font-size: 19.5px; color: var(--txt); max-width: 730px; margin: 22px auto 0; }
+  .hero .cta { margin-top: 32px; display: flex; gap: 13px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 12.5px 26px; border-radius: 10px; font-weight: 700; font-size: 15.5px;
+    transition: transform .12s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn:hover { text-decoration: none; transform: translateY(-1px); }
+  .btn.primary { background: linear-gradient(180deg, #d9a92f, #c1901d); color: #fffdf7; box-shadow: 0 6px 18px rgba(169, 127, 20, .30); text-shadow: 0 1px 1px rgba(90, 66, 4, .25); }
+  .btn.primary:hover { box-shadow: 0 9px 24px rgba(169, 127, 20, .36); }
+  .btn.ghost { background: var(--panel); color: var(--ink); border: 1px solid var(--line2); box-shadow: var(--shadow); }
+  .btn.ghost:hover { border-color: var(--gold-bright); }
+  .hero .fineprint { margin-top: 18px; font-size: 13.5px; color: var(--mut); }
+
+  /* ---- sections ---- */
+  section { padding: 58px 0 6px; }
+  .eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); }
+  section h2 { font-size: 29px; font-weight: 800; letter-spacing: -.012em; color: var(--ink); margin: 8px 0 8px; }
+  section .sub { color: var(--mut); max-width: 770px; margin-bottom: 30px; font-size: 16.5px; }
+  .divider { display: flex; align-items: center; gap: 14px; max-width: 1060px; margin: 58px auto 0; padding: 0 24px; }
+  .divider::before, .divider::after { content: ""; height: 1px; flex: 1;
+    background: linear-gradient(90deg, transparent, var(--line2)); }
+  .divider::after { background: linear-gradient(90deg, var(--line2), transparent); }
+  .divider span { width: 7px; height: 7px; transform: rotate(45deg); background: var(--gold-bright); flex: none; box-shadow: 0 0 0 3px rgba(227, 179, 65, .18); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 22px 22px 18px; box-shadow: var(--shadow); position: relative;
+    transition: transform .14s ease, box-shadow .16s ease;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+  .card h3 { font-size: 17px; color: var(--ink); margin-bottom: 6px; display: flex; align-items: baseline; gap: 10px; }
+  .card h3 .no { font-size: 12px; font-weight: 800; color: var(--gold); letter-spacing: .08em; }
+  .card p { color: var(--mut); font-size: 14.8px; }
+  .planes .card::before {
+    content: ""; position: absolute; top: 0; inset-inline: 22px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--gold-bright), rgba(227, 179, 65, .12));
+  }
+  .beyond .card { background: linear-gradient(180deg, #fffdf9, #fbf7ec); }
+  .beyond .card h3::after { content: ""; flex: 1; height: 1px; background: var(--line); margin-inline-start: 6px; }
+
+  .docs { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 16px; }
+  .docs a {
+    display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px; color: var(--txt); box-shadow: var(--shadow);
+    transition: transform .14s ease, box-shadow .16s ease, border-color .16s ease;
+  }
+  .docs a:hover { border-color: var(--gold-bright); text-decoration: none; transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+  .docs a .t { font-weight: 700; font-size: 16px; color: var(--ink); }
+  .docs a .t::after { content: " →"; color: var(--gold); }
+  [dir="rtl"] .docs a .t::after { content: " ←"; }
+  .docs a .d { color: var(--mut); font-size: 13.8px; margin-top: 4px; }
+
+  /* ---- footer ---- */
+  footer { margin-top: 76px; background: linear-gradient(180deg, var(--sand), var(--sand2)); border-top: 1px solid var(--line); }
+  footer .wrap { padding-top: 34px; padding-bottom: 40px; }
+  footer .cols { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  footer .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 700; }
+  footer img { width: 24px; height: 24px; border-radius: 6px; box-shadow: 0 2px 6px rgba(35,43,54,.3); }
+  footer .links { margin-inline-start: auto; display: flex; gap: 22px; font-size: 14px; }
+  footer .fine { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--mut);
+    display: flex; gap: 18px; flex-wrap: wrap; }
+  footer .fine .thread-mini { width: 34px; height: 2px; border-radius: 2px; background: var(--gold-bright); align-self: center; }
+
+  @media (max-width: 640px) {
+    .hero { padding: 54px 0 42px; }
+    .hero h1 { font-size: 32px; }
+    .hero .pitch { font-size: 17px; }
+    header.site nav a:not(#langBtn) { display: none; }
+    header.site .name small { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <img class="mark" src="assets/app-icon-256.png" alt="EsoAgent — the golden wing">
+    <span class="name">EsoAgent<small data-i18n="tagline">Fleet control, unified</small></span>
+    <nav>
+      <a href="#planes" data-i18n="navPlanes">The five planes</a>
+      <a href="#beyond" data-i18n="navBeyond">Beyond the field</a>
+      <a href="#docs" data-i18n="navDocs">Docs</a>
+      <a href="https://github.com/SENESO/eso-agent" data-i18n="navGithub">GitHub</a>
+      <button id="langBtn" onclick="toggleLang()">العربية</button>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <img class="mark" src="assets/app-icon-256.png" alt="">
+    <div class="eyebrow" data-i18n="heroEyebrow">Self-hosted · Open source · Signed end to end</div>
+    <h1 data-i18n="heroTitle">Every machine you own,<br><span class="gold">under your control.</span></h1>
+    <div class="thread"></div>
+    <p class="pitch" data-i18n="heroPitch">EsoAgent is a self-hosted fleet platform that unifies what TeamViewer, Tailscale and SSH each do separately — remote desktop, shell, files, mesh networking — and adds an operator-grade perception stack none of them has. One product, one device registry, one activity timeline.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/SENESO/eso-agent/releases/latest" data-i18n="ctaDownload">Download the latest release</a>
+      <a class="btn ghost" href="https://github.com/SENESO/eso-agent/blob/main/USER-GUIDE.md" data-i18n="ctaGuide">Read the user guide</a>
+    </div>
+    <p class="fineprint" data-i18n="heroFine">Windows &amp; Linux · self-contained installers · no account, no cloud, no subscription — your fleet server is yours.</p>
+  </div>
+</div>
+
+<section id="planes">
+  <div class="wrap">
+    <div class="eyebrow">01</div>
+    <h2 data-i18n="planesTitle">The five planes</h2>
+    <p class="sub" data-i18n="planesSub">Most tools cover one plane well. EsoAgent was designed as all five, sharing one identity, one audit trail, and one trust model: the server relays — it can never forge.</p>
+    <div class="grid planes">
+      <div class="card">
+        <h3><span class="no">I</span><span data-i18n="p1t">Command &amp; automation</span></h3>
+        <p data-i18n="p1d">Shell and exec as SYSTEM/root, durable jobs that survive restarts, process supervision, a fleet script library, device scheduled tasks, OS patch management, and fleet-wide signed update rollouts with rollback.</p>
+      </div>
+      <div class="card">
+        <h3><span class="no">II</span><span data-i18n="p2t">Remote desktop</span></h3>
+        <p data-i18n="p2d">Live desktop direct or relayed through your fleet server, in the app or the browser. Privacy mode, in-session chat, consent gates, session recording, and quality-floored adaptive streaming that never silently degrades.</p>
+      </div>
+      <div class="card">
+        <h3><span class="no">III</span><span data-i18n="p3t">Mesh networking</span></h3>
+        <p data-i18n="p3d">A WireGuard mesh with stable virtual IPs and name resolution, subnet routing, exit nodes, and TCP/UDP/SOCKS5 tunnels to anything a device can reach.</p>
+      </div>
+      <div class="card">
+        <h3><span class="no">IV</span><span data-i18n="p4t">Perception &amp; diagnostics</span></h3>
+        <p data-i18n="p4d">One-call diagnostics (“what's the problem?”), deep telemetry, crash watch — and a perception stack that reads UI structure and app data as data, not screenshots.</p>
+      </div>
+      <div class="card">
+        <h3><span class="no">V</span><span data-i18n="p5t">Fleet &amp; owner control</span></h3>
+        <p data-i18n="p5d">One registry, one unified activity timeline, health dashboards, alerts with signed webhooks, owner 2FA, per-capability toggles, and access codes — temporary, scoped, revocable control grants.</p>
+      </div>
+      <div class="card">
+        <h3><span class="no">§</span><span data-i18n="p6t">Zero-trust by construction</span></h3>
+        <p data-i18n="p6d">Every operator action is signed by a key the fleet server never holds. A compromised server can relay nothing it wasn't given — it cannot forge a single command.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"><span></span></div>
+
+<section id="beyond">
+  <div class="wrap">
+    <div class="eyebrow">02</div>
+    <h2 data-i18n="beyondTitle">Beyond the field</h2>
+    <p class="sub" data-i18n="beyondSub">Techniques from EsoAgent that appear in no competitor we surveyed (44 systems). Each is measured, not marketed — see BENCHMARKS.md.</p>
+    <div class="grid beyond">
+      <div class="card">
+        <h3 data-i18n="b1t">Perception stack</h3>
+        <p data-i18n="b1d">UI trees → app data APIs → event streams → semantic renders → delta pixels → screenshots last. The operator sees machines the way machines see themselves: as structured data.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="b2t">Delta perception</h3>
+        <p data-i18n="b2d">The agent remembers the last state and sends structural diffs only — a full inventory is 5,884 bytes once, then 132 bytes when nothing changed.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="b3t">Intent-level operations</h3>
+        <p data-i18n="b3d">One declarative call — “ensure this service is running” — executed and verified on the device, returning a compact proof object instead of twenty round-trips.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="b4t">Design-as-data</h3>
+        <p data-i18n="b4d">Blender, Unreal and Godot scenes as diffable JSON, with object-ID render passes that make bounding boxes and coverage exact — computed from data, never estimated from pixels.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="b5t">Cost-metered awareness</h3>
+        <p data-i18n="b5d">Every perception response reports its own cost in bytes. Knowing the screen is a measured, budgeted operation — cheaper and more accurate than a screenshot.</p>
+      </div>
+      <div class="card">
+        <h3 data-i18n="b6t">Access codes, done right</h3>
+        <p data-i18n="b6d">Hand someone a short code: they get a signed, scoped, expiring grant for one device. No account, no password sharing — and you can revoke it mid-session.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"><span></span></div>
+
+<section id="docs">
+  <div class="wrap">
+    <div class="eyebrow">03</div>
+    <h2 data-i18n="docsTitle">Documentation</h2>
+    <p class="sub" data-i18n="docsSub">Plain-language first, engineering depth one click deeper.</p>
+    <div class="docs">
+      <a href="https://github.com/SENESO/eso-agent/blob/main/USER-GUIDE.md">
+        <div class="t" data-i18n="d1t">User Guide</div>
+        <div class="d" data-i18n="d1d">Install → enroll → first session, no expertise assumed.</div>
+      </a>
+      <a href="https://github.com/SENESO/eso-agent/blob/main/BENCHMARKS.md">
+        <div class="t" data-i18n="d2t">Benchmarks</div>
+        <div class="d" data-i18n="d2d">Measured numbers and the honest method behind them.</div>
+      </a>
+      <a href="https://github.com/SENESO/eso-agent/blob/main/FEATURE-MATRIX.md">
+        <div class="t" data-i18n="d3t">Feature Matrix</div>
+        <div class="d" data-i18n="d3d">An audited map of the whole field — have it, in this release, roadmap, or refused.</div>
+      </a>
+      <a href="https://github.com/SENESO/eso-agent/blob/main/CODE_SIGNING.md">
+        <div class="t" data-i18n="d4t">Code Signing</div>
+        <div class="d" data-i18n="d4d">How releases are built and signed, and how updates verify themselves.</div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <span class="brand"><img src="assets/app-icon-256.png" alt="">EsoAgent</span>
+      <span data-i18n="footFree">Free and open source (MIT).</span>
+      <span class="links">
+        <a href="https://github.com/SENESO/eso-agent/releases" data-i18n="footRel">Releases</a>
+        <a href="https://github.com/SENESO/eso-agent/blob/main/ROADMAP.md" data-i18n="footRoad">Roadmap</a>
+        <a href="https://seneso.github.io/" data-i18n="footAuthor">More projects by SENESO</a>
+      </span>
+    </div>
+    <div class="fine">
+      <span class="thread-mini"></span>
+      <span data-i18n="footNote">Built in the open. The fleet server relays — it can never forge.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  var I18N = {
+    ar: {
+      tagline: "تحكم موحّد بالأسطول",
+      navPlanes: "المستويات الخمسة", navBeyond: "ما وراء المجال", navDocs: "المستندات", navGithub: "GitHub",
+      heroEyebrow: "ذاتي الاستضافة · مفتوح المصدر · موقّع من الطرف للطرف",
+      heroTitle: "كل أجهزتك،<br><span class=\"gold\">تحت سيطرتك.</span>",
+      heroPitch: "EsoAgent منصة أسطول ذاتية الاستضافة توحّد ما تفعله TeamViewer وTailscale وSSH منفصلةً — سطح مكتب عن بُعد وطرفية وملفات وشبكة Mesh — وتضيف منظومة إدراك للمشغّل لا يملكها أيٌّ منها. منتج واحد، سجل أجهزة واحد، خط نشاط واحد.",
+      ctaDownload: "حمّل أحدث إصدار", ctaGuide: "اقرأ دليل المستخدم",
+      heroFine: "ويندوز ولينكس · مثبّتات مكتفية ذاتيًا · بلا حساب ولا سحابة ولا اشتراك — خادم أسطولك ملكك.",
+      planesTitle: "المستويات الخمسة",
+      planesSub: "أغلب الأدوات تتقن مستوى واحدًا. EsoAgent صُمم بالمستويات الخمسة معًا، بهوية واحدة وسجل تدقيق واحد ونموذج ثقة واحد: الخادم يُمرّر — ولا يستطيع التزوير أبدًا.",
+      p1t: "الأوامر والأتمتة", p1d: "طرفية وتنفيذ بصلاحيات SYSTEM/root، مهام دائمة تنجو من إعادة التشغيل، إشراف على العمليات، مكتبة سكربتات للأسطول، مهام مجدولة على الجهاز، إدارة تحديثات نظام التشغيل، ونشر تحديثات موقّعة للأسطول كله مع التراجع.",
+      p2t: "سطح المكتب عن بُعد", p2d: "سطح مكتب حي مباشرةً أو عبر خادم أسطولك، في التطبيق أو المتصفح. وضع خصوصية، محادثة داخل الجلسة، بوابات موافقة، تسجيل للجلسات، وبث تكيفي بأرضية جودة لا يهبط تحتها بصمت.",
+      p3t: "شبكة Mesh", p3d: "شبكة WireGuard بعناوين افتراضية ثابتة وحلّ أسماء، توجيه شبكات فرعية، عقد خروج، وأنفاق TCP/UDP/SOCKS5 لأي شيء يصله الجهاز.",
+      p4t: "الإدراك والتشخيص", p4d: "تشخيص بمكالمة واحدة («ما المشكلة؟»)، قياسات عميقة، مراقبة أعطال — ومنظومة إدراك تقرأ بنية الواجهة وبيانات التطبيقات كبيانات، لا كلقطات شاشة.",
+      p5t: "الأسطول وتحكم المالك", p5d: "سجل واحد وخط نشاط موحّد ولوحات صحة وتنبيهات بخطافات موقّعة ومصادقة ثنائية للمالك ومفاتيح قدرات، وأكواد وصول — منح تحكم مؤقتة ومحدودة النطاق وقابلة للإلغاء.",
+      p6t: "انعدام ثقة بالبناء", p6d: "كل إجراء من المشغّل موقّع بمفتاح لا يملكه خادم الأسطول أبدًا. الخادم المخترَق لا يستطيع تمرير ما لم يُعطَ له — ولا تزوير أمر واحد.",
+      beyondTitle: "ما وراء المجال",
+      beyondSub: "تقنيات في EsoAgent لا تظهر في أي منافس شمله مسحنا (44 نظامًا). كلها مقاسة لا مسوّقة — راجع BENCHMARKS.md.",
+      b1t: "منظومة الإدراك", b1d: "أشجار واجهة ← واجهات بيانات التطبيقات ← تدفقات أحداث ← عروض دلالية ← بكسلات دلتا ← ولقطات الشاشة أخيرًا. المشغّل يرى الأجهزة كما ترى نفسها: بيانات منظمة.",
+      b2t: "إدراك الدلتا", b2d: "الوكيل يتذكر آخر حالة ويرسل الفروق البنيوية فقط — الجرد الكامل 5,884 بايت مرة واحدة، ثم 132 بايت عند عدم التغيّر.",
+      b3t: "عمليات بمستوى النية", b3d: "مكالمة تصريحية واحدة — «تأكد أن هذه الخدمة تعمل» — تُنفَّذ وتُتحقق على الجهاز وتعيد كائن إثبات مدمجًا بدل عشرين رحلة ذهابًا وإيابًا.",
+      b4t: "التصميم كبيانات", b4d: "مشاهد Blender وUnreal وGodot كـ JSON قابلة للمقارنة، مع عروض معرّفات كائنات تجعل الصناديق المحيطة والتغطية دقيقة — محسوبة من البيانات لا مقدّرة من البكسلات.",
+      b5t: "وعي مقاس التكلفة", b5d: "كل رد إدراك يعلن تكلفته بالبايت. معرفة الشاشة عملية مقاسة ومُميزنة — أرخص وأدق من لقطة شاشة.",
+      b6t: "أكواد وصول، بشكل صحيح", b6d: "امنح أحدهم كودًا قصيرًا: يحصل على منحة موقّعة محدودة النطاق ومنتهية لجهاز واحد. بلا حساب ولا مشاركة كلمة مرور — وتستطيع إلغاءها وسط الجلسة.",
+      docsTitle: "المستندات", docsSub: "لغة بسيطة أولًا، وعمق هندسي على بُعد نقرة.",
+      d1t: "دليل المستخدم", d1d: "التثبيت ← التسجيل ← أول جلسة، بلا خبرة مفترضة.",
+      d2t: "القياسات", d2d: "أرقام مقاسة والمنهج الصادق خلفها.",
+      d3t: "مصفوفة المزايا", d3d: "خريطة مدققة للمجال كله — موجود، في هذا الإصدار، على الخطة، أو مرفوض.",
+      d4t: "توقيع الكود", d4d: "كيف تُبنى الإصدارات وتُوقّع، وكيف تتحقق التحديثات من نفسها.",
+      footFree: "حر ومفتوح المصدر (MIT).", footRel: "الإصدارات", footRoad: "خطة الطريق", footAuthor: "مشاريع أخرى من SENESO",
+      footNote: "مبني في العلن. خادم الأسطول يُمرّر — ولا يستطيع التزوير أبدًا."
+    }
+  };
+  var lang = localStorage.getItem("eso-site-lang") || "en";
+  function applyLang() {
+    var dict = I18N[lang];
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    document.getElementById("langBtn").textContent = lang === "ar" ? "English" : "العربية";
+    if (!dict) return;
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var k = el.getAttribute("data-i18n");
+      if (dict[k]) el.innerHTML = dict[k];
+    });
+  }
+  function toggleLang() {
+    lang = lang === "ar" ? "en" : "ar";
+    localStorage.setItem("eso-site-lang", lang);
+    applyLang();
+  }
+  applyLang();
+</script>
+</body>
+</html>

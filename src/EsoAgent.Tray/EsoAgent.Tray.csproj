@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>EsoAgent.Tray</RootNamespace>
+    <AssemblyName>EsoAgent.Tray</AssemblyName>
+    <!-- Tray companion: runs in the owner's interactive session. The service
+         (session 0) cannot capture the screen or run interactive processes, so
+         it forwards those requests here over the EsoAgentTrayPipe named pipe.
+         The tray also drives the owner's kill switch via EsoAgentControlPipe. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\*.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EsoAgent.Core\EsoAgent.Core.csproj" />
+  </ItemGroup>
+</Project>
