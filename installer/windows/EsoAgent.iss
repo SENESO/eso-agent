@@ -175,7 +175,8 @@ procedure InitializeWizard();
 begin
   { Owner password page: install.ps1 runs hidden, so its interactive
     prompt can never be answered inside the GUI installer - the
-    password is collected here and passed via {code:GetOwnerPassword}. }
+    password is collected here and passed to install.ps1 through the
+    GetOwnerPassword code function referenced by the [Run] entry. }
   PasswordPage := CreateInputQueryPage(wpSelectDir,
     'Owner password', 'Protect the control panel',
     'Set the owner password for this device (minimum 8 characters, '
