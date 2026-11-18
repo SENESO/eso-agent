@@ -412,7 +412,7 @@ public static class InputInjector
             }
             var vks = parts.Select(VirtualKey).Where(v => v != 0).ToArray();
             if (input.Down) foreach (var vk in vks) SendKey(vk, keyUp: false);
-            else foreach (var vk in vks.Reverse()) SendKey(vk, keyUp: true);
+            else foreach (var vk in Enumerable.Reverse(vks)) SendKey(vk, keyUp: true);
             return;
         }
         var single = VirtualKey(key);
