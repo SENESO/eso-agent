@@ -48,9 +48,9 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 
 if ($healthy) {
-    Log "health check OK — update applied; backup kept at $backupDir"
+    Log "health check OK - update applied; backup kept at $backupDir"
 } else {
-    Log "health check FAILED — rolling back from $backupDir"
+    Log "health check FAILED - rolling back from $backupDir"
     Stop-Service -Name "EsoAgent" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
     foreach ($bin in $binaries) {

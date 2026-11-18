@@ -1,5 +1,5 @@
 # EsoAgent post-install verification (item 45): the installer finishes
-# only after the agent proves itself — service running, doctor's first
+# only after the agent proves itself - service running, doctor's first
 # run clean enough to answer, owner panel reachable. Writes install.log
 # next to the data dir and first-run.txt with the device code + how
 # approval works. Exit code != 0 makes the installer report the failure
@@ -20,6 +20,13 @@ $svc = Get-Service -Name "EsoAgent" -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq "Running") { Log "service: Running" }
 else { Log "service: NOT running ($($svc.Status))"; $ok = $false }
 
+# 1b) the desktop app the finish page offers to open must actually be
+# in the install dir (the 1.2.0 payload shipped without it and the
+# launch died with CreateProcess code 2 - gate on it here instead).
+$appExe = Join-Path (Split-Path $DataDir -Parent) "EsoAgent.App.exe"
+if (Test-Path $appExe) { Log "app: EsoAgent.App.exe present" }
+else { Log "app: EsoAgent.App.exe MISSING from the install dir"; $ok = $false }
+
 # 2) agent answers on its loopback status (doctor-class self-check)
 $answered = $false
 foreach ($i in 1..15) {
@@ -31,7 +38,7 @@ foreach ($i in 1..15) {
     break
   } catch { Start-Sleep -Seconds 1 }
 }
-if ($answered) { Log "agent port $Port: listening" } else { Log "agent port $Port: no answer after 15 s"; $ok = $false }
+if ($answered) { Log "agent port ${Port}: listening" } else { Log "agent port ${Port}: no answer after 15 s"; $ok = $false }
 
 # 3) device code (the first-run screen's key fact)
 $code = ""
@@ -46,7 +53,7 @@ Your device code: $code
 
 What happens next:
   1. Your operator (or you, in the fleet panel) approves this device
-     under its code — until then it accepts nothing.
+     under its code - until then it accepts nothing.
   2. Open the EsoAgent app to control your devices, or the owner panel
      in a browser at https://<this-device>:$Port/panel/
   3. The tray icon (golden wing) shows live status: gold = online,

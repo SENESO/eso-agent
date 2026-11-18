@@ -1,7 +1,7 @@
 # EsoAgent installer (Windows). Run ONCE as Administrator from the published package folder.
 # Installs the EsoAgent service (LocalSystem) + tray companion, generates the API token
 # and owner password, scopes the firewall to the tailnet subnet, and prints the summary
-# the operator needs (the token itself is shown ONCE — hand it over via secure entry).
+# the operator needs (the token itself is shown ONCE - hand it over via secure entry).
 [CmdletBinding()]
 param(
     [string]$InstallDir = "C:\Program Files\EsoAgent",
@@ -9,6 +9,7 @@ param(
     [string]$FleetUrl = "",
     [string]$FleetFingerprint = "",
     [string]$EnrollmentKey = "",
+    [string]$OwnerPassword = "",
     [switch]$EnableMesh
 )
 $ErrorActionPreference = "Stop"
@@ -61,10 +62,15 @@ if (-not (Test-Path $tokenFile)) {
 }
 
 # --- owner password (dashboard) ---
-Write-Host ""
-Write-Host "Set the OWNER PASSWORD for the control panel (you will log in with it at https://localhost:$Port/panel/):"
-$secure = Read-Host "Owner password" -AsSecureString
-$plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+# Supplied non-interactively by the Inno installer (wizard page) via
+# -OwnerPassword; the interactive prompt remains for direct/zip runs.
+$plain = $OwnerPassword
+if (-not $plain) {
+    Write-Host ""
+    Write-Host "Set the OWNER PASSWORD for the control panel (you will log in with it at https://localhost:$Port/panel/):"
+    $secure = Read-Host "Owner password" -AsSecureString
+    $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+}
 if ($plain.Length -lt 8) { throw "Owner password must be at least 8 characters." }
 $env:ESOAGENT_OWNER_PASSWORD = $plain
 & (Join-Path $InstallDir "EsoAgent.Windows.exe") --set-owner-password
@@ -95,11 +101,11 @@ Start-Sleep -Seconds 3
 $tailnet = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -like "100.*" } | Select-Object -First 1).IPAddress
 $fingerprintFile = Join-Path $dataDir "cert.pfx.fingerprint"
-$fingerprint = if (Test-Path $fingerprintFile) { (Get-Content $fingerprintFile -Raw).Trim() } else { "(service still starting — check $fingerprintFile)" }
+$fingerprint = if (Test-Path $fingerprintFile) { (Get-Content $fingerprintFile -Raw).Trim() } else { "(service still starting - check $fingerprintFile)" }
 
 Write-Host ""
 Write-Host "================ EsoAgent installed ================"
-Write-Host "Service        : EsoAgent (LocalSystem, auto-start) — running"
+Write-Host "Service        : EsoAgent (LocalSystem, auto-start) - running"
 Write-Host "Data directory : $dataDir"
 Write-Host "Port           : $Port"
 Write-Host "Tailnet IP     : $tailnet"
@@ -107,7 +113,7 @@ Write-Host "Cert fingerprint (pin this in the client config):"
 Write-Host "  $fingerprint"
 Write-Host "Owner panel    : https://localhost:$Port/panel/  (also https://$tailnet`:$Port/panel/ from your phone on the tailnet)"
 Write-Host ""
-Write-Host "API TOKEN — shown ONCE. Hand it to the operator via secure entry, then clear this window:"
+Write-Host "API TOKEN - shown ONCE. Hand it to the operator via secure entry, then clear this window:"
 Write-Host "  $((Get-Content $tokenFile -Raw).Trim())"
 Write-Host "Token file     : $tokenFile (rotate it any time from the panel's Access tab)"
 Write-Host "====================================================="

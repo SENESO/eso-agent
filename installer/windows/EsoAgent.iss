@@ -11,7 +11,9 @@
 ;     pre-flight changes NOTHING. Post-install verification gates the
 ;     finish page; the install log is always kept.
 ;   * Two modes: friendly GUI, or silent/parameterised for IT:
-;       EsoAgent-Setup.exe /VERYSILENT /FLEETURL=https://fleet:8740 /ENROLLKEY=XXXX
+;       EsoAgent-Setup.exe /VERYSILENT /FLEETURL=https://fleet:8740 /ENROLLKEY=XXXX /OWNERPASSWORD=XXXX
+;     (the GUI asks for the owner password on its own wizard page;
+;     silent installs pass it as /OWNERPASSWORD= - no quotes in it.)
 ;   * Repair: re-running the installer over the same version repairs in
 ;     place. Uninstall removes service + files; device DATA is kept
 ;     unless the user explicitly chooses to remove it.
@@ -20,7 +22,7 @@
 ;     (see CODE_SIGNING.md). Unsigned builds stay unsigned — never fake.
 
 #define AppName "EsoAgent"
-#define AppVersion "1.2.0"
+#define AppVersion "1.2.1"
 #define AppPublisher "EsoAgent"
 #define AppURL "https://github.com/SENESO/eso-agent"
 
@@ -58,6 +60,21 @@ Name: "arabic"; MessagesFile: "compiler:Languages\Arabic.isl"
 Source: "payload\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "verify-install.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; \
+  GroupDescription: "Shortcuts:"
+
+[Icons]
+; The App is the user-facing surface — Start Menu always, Desktop via
+; the (default-on) task above. Both point at the App's real installed
+; path in {app}; the tray is a background companion (autostart via
+; [Registry]) and the agent is a service, so neither gets a shortcut.
+Name: "{group}\EsoAgent"; Filename: "{app}\EsoAgent.App.exe"; \
+  WorkingDir: "{app}"; Comment: "Open the EsoAgent app"
+Name: "{group}\Uninstall EsoAgent"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\EsoAgent"; Filename: "{app}\EsoAgent.App.exe"; \
+  WorkingDir: "{app}"; Comment: "Open the EsoAgent app"; Tasks: desktopicon
+
 [Registry]
 ; Tray starts at user login (the agent service itself is boot-registered
 ; by install.ps1 as an auto-start Windows service).
@@ -69,21 +86,23 @@ Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 ; Registration + verification. install.ps1 is idempotent and detects an
 ; existing install (same dir, same service, same data) — an upgrade is
 ; an in-place binary refresh, never a second installation.
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install.ps1"" -InstallDir ""{app}"" {code:GetFleetParams}"; \
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install.ps1"" -InstallDir ""{app}"" {code:GetFleetParams} {code:GetOwnerPassword}"; \
   Flags: runhidden waituntilterminated; StatusMsg: "Registering the EsoAgent service..."
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\verify-install.ps1"""; \
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\verify-install.ps1"""; \
   Flags: runhidden waituntilterminated; StatusMsg: "Verifying the installation (service, self-check, panel)..."
 ; Finish page offer: open the app.
 Filename: "{app}\EsoAgent.App.exe"; Description: "Open the EsoAgent app"; \
   Flags: postinstall nowait skipifsilent unchecked
 
 [UninstallRun]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall.ps1"""; \
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall.ps1"""; \
   Flags: runhidden waituntilterminated
 
 [Code]
 var
   FirstRunPage: TOutputMsgWizardPage;
+  PasswordPage: TInputQueryWizardPage;
+  OwnerPasswordValue: string;
 
 function GetFleetParams(Param: string): string;
 var
@@ -96,6 +115,25 @@ begin
     Result := Result + ' -FleetUrl "' + FleetUrl + '"';
   if EnrollKey <> '' then
     Result := Result + ' -EnrollmentKey "' + EnrollKey + '"';
+end;
+
+{ The owner password for install.ps1: the /OWNERPASSWORD= setup
+  parameter wins (silent installs); otherwise the wizard page value.
+  Single-quoted for PowerShell (literal string, no $ expansion);
+  quote characters are rejected on the wizard page and documented
+  as unsupported for the silent parameter. Empty when neither is
+  set - install.ps1 then falls back to its interactive prompt,
+  which the GUI flow makes unreachable by validating the page. }
+function GetOwnerPassword(Param: string): string;
+var
+  Pw: string;
+begin
+  Result := '';
+  Pw := ExpandConstant('{param:OWNERPASSWORD|}');
+  if Pw = '' then
+    Pw := OwnerPasswordValue;
+  if Pw <> '' then
+    Result := ' -OwnerPassword ''' + Pw + '''';
 end;
 
 { Pre-flight: refuse BEFORE touching anything when the machine cannot
@@ -135,10 +173,43 @@ end;
   approval works) written by verify-install.ps1. }
 procedure InitializeWizard();
 begin
+  { Owner password page: install.ps1 runs hidden, so its interactive
+    prompt can never be answered inside the GUI installer - the
+    password is collected here and passed via {code:GetOwnerPassword}. }
+  PasswordPage := CreateInputQueryPage(wpSelectDir,
+    'Owner password', 'Protect the control panel',
+    'Set the owner password for this device (minimum 8 characters, '
+    + 'no quote characters). You will log in with it on the owner '
+    + 'panel at https://localhost:8737/panel/.');
+  PasswordPage.Add('Owner password:', True);
   FirstRunPage := CreateOutputMsgPage(wpInstalling,
     'Your device is ready', 'Device code and next steps',
     'EsoAgent verified itself after install. The summary below is also '
     + 'saved as first-run.txt in the data folder.');
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = PasswordPage.ID then
+  begin
+    if Length(PasswordPage.Values[0]) < 8 then
+    begin
+      MsgBox('The owner password must be at least 8 characters.',
+        mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    if (Pos('"', PasswordPage.Values[0]) > 0)
+        or (Pos('''', PasswordPage.Values[0]) > 0) then
+    begin
+      MsgBox('The owner password must not contain quote characters.',
+        mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    OwnerPasswordValue := PasswordPage.Values[0];
+  end;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
