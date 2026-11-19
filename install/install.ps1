@@ -36,9 +36,18 @@ $existing = Get-Service -Name "EsoAgent" -ErrorAction SilentlyContinue
 if ($existing) { Stop-Service -Name "EsoAgent" -Force -ErrorAction SilentlyContinue }
 
 # --- copy binaries ---
-Copy-Item (Join-Path $binSrc "EsoAgent.Windows.exe") $InstallDir -Force
-Copy-Item (Join-Path $binSrc "EsoAgent.Tray.exe") $InstallDir -Force
-Copy-Item (Join-Path $src "update-apply.ps1") $InstallDir -Force
+# When the Inno installer runs this script, the script already sits
+# inside $InstallDir with the binaries beside it - copying a file onto
+# itself throws, so skip any copy whose source IS the destination.
+function Copy-IfNewLocation([string]$SourceFile, [string]$DestDir) {
+    $destFile = Join-Path $DestDir (Split-Path $SourceFile -Leaf)
+    if ([IO.Path]::GetFullPath($SourceFile) -ne [IO.Path]::GetFullPath($destFile)) {
+        Copy-Item $SourceFile $DestDir -Force
+    }
+}
+Copy-IfNewLocation (Join-Path $binSrc "EsoAgent.Windows.exe") $InstallDir
+Copy-IfNewLocation (Join-Path $binSrc "EsoAgent.Tray.exe") $InstallDir
+Copy-IfNewLocation (Join-Path $src "update-apply.ps1") $InstallDir
 
 # --- config (esoagent.json) ---
 $config = [ordered]@{
