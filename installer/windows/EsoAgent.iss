@@ -22,7 +22,7 @@
 ;     (see CODE_SIGNING.md). Unsigned builds stay unsigned — never fake.
 
 #define AppName "EsoAgent"
-#define AppVersion "1.2.1"
+#define AppVersion "1.2.2"
 #define AppPublisher "EsoAgent"
 #define AppURL "https://github.com/SENESO/eso-agent"
 
@@ -190,26 +190,35 @@ begin
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Pw: string;
 begin
   Result := True;
   if CurPageID = PasswordPage.ID then
   begin
-    if Length(PasswordPage.Values[0]) < 8 then
+    { Validate the EFFECTIVE password: the silent-install parameter
+      wins over the wizard page value, which stays empty in silent
+      mode because the page is never shown. Validating the page
+      value alone blocked every silent install on an empty string. }
+    Pw := ExpandConstant('{param:OWNERPASSWORD|}');
+    if Pw = '' then
+      Pw := PasswordPage.Values[0];
+    if Length(Pw) < 8 then
     begin
       MsgBox('The owner password must be at least 8 characters.',
         mbError, MB_OK);
       Result := False;
       Exit;
     end;
-    if (Pos('"', PasswordPage.Values[0]) > 0)
-        or (Pos('''', PasswordPage.Values[0]) > 0) then
+    if (Pos('"', Pw) > 0)
+        or (Pos('''', Pw) > 0) then
     begin
       MsgBox('The owner password must not contain quote characters.',
         mbError, MB_OK);
       Result := False;
       Exit;
     end;
-    OwnerPasswordValue := PasswordPage.Values[0];
+    OwnerPasswordValue := Pw;
   end;
 end;
 
