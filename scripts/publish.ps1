@@ -16,6 +16,12 @@ Write-Host "== Windows service + tray (win-x64) =="
 Pub "src/EsoAgent.Windows" "win-x64" "$dist\pkg-windows"
 Pub "src/EsoAgent.Tray" "win-x64" "$dist\pkg-windows"
 Copy-Item install\install.ps1, install\uninstall.ps1, install\update-apply.ps1 "$dist\pkg-windows\"
+Write-Host "== Embedded mesh engine (eso-mesh.exe + wintun.dll) =="
+# The Windows package must never ship without the embedded engine: a failed
+# build or hash check throws and aborts the publish rather than silently
+# reintroducing the external WireGuard dependency.
+& "$PWD\scripts\build-mesh-engine.ps1" -Out "$dist\pkg-windows"
+& "$PWD\scripts\fetch-wintun.ps1" -Out "$dist\pkg-windows"
 Compress-Archive -Path "$dist\pkg-windows\*" -DestinationPath "$dist\esoagent-windows.zip"
 
 Write-Host "== Linux daemon (linux-x64) =="

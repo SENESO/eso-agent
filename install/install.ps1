@@ -50,17 +50,30 @@ Copy-IfNewLocation (Join-Path $binSrc "EsoAgent.Tray.exe") $InstallDir
 Copy-IfNewLocation (Join-Path $src "update-apply.ps1") $InstallDir
 
 # --- config (esoagent.json) ---
-$config = [ordered]@{
-    port = $Port
-    fleet = [ordered]@{
-        enabled = [bool]$FleetUrl
-        serverUrl = $FleetUrl
-        serverFingerprint = $FleetFingerprint
-        enrollmentKey = $EnrollmentKey
+# PRESERVE an existing config. An upgrade must never wipe a fleet
+# enrollment (fleet.enabled, server URL, fingerprint, enrollment key)
+# by reseeding defaults over it - that silently dropped an enrolled
+# device off its fleet in the v1.2.4 upgrade (LAUNCH-REPORT.md s.21).
+# Defaults are written ONLY on a fresh install, when no esoagent.json
+# exists in the data dir yet. Explicit re-configuration is done from
+# the panel / by editing the file, never by reinstalling.
+$configFile = Join-Path $dataDir "esoagent.json"
+if (Test-Path $configFile) {
+    Write-Host "Existing config preserved (upgrade): $configFile"
+    Write-Host "  Enrollment and settings left untouched; defaults NOT reseeded."
+} else {
+    $config = [ordered]@{
+        port = $Port
+        fleet = [ordered]@{
+            enabled = [bool]$FleetUrl
+            serverUrl = $FleetUrl
+            serverFingerprint = $FleetFingerprint
+            enrollmentKey = $EnrollmentKey
+        }
+        mesh = [ordered]@{ enabled = [bool]$EnableMesh }
     }
-    mesh = [ordered]@{ enabled = [bool]$EnableMesh }
+    $config | ConvertTo-Json -Depth 5 | Set-Content $configFile -Encoding UTF8
 }
-$config | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $dataDir "esoagent.json") -Encoding UTF8
 
 # --- API token (256-bit, generated here; the service only reads it) ---
 $tokenFile = Join-Path $dataDir "token"

@@ -4,9 +4,29 @@
         xmlns:app="using:EsoAgent.App"
         x:Class="EsoAgent.App.MainWindow"
         Title="EsoAgent — your machines, under your control" Width="1240" Height="780"
-        Icon="avares://EsoAgent.App/Assets/app.ico">
+        Icon="avares://EsoAgent.App/Assets/app.ico"
+        Background="{DynamicResource EsoBgBrush}"
+        Foreground="{DynamicResource EsoTextBrush}">
+    <Window.Styles>
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{DynamicResource EsoAccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource EsoOnAccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource EsoSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource EsoLineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource EsoRadiusCard}" />
+            <Setter Property="Padding" Value="12" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="{DynamicResource EsoMutedBrush}" />
+        </Style>
+    </Window.Styles>
     <DockPanel>
-        <Border DockPanel.Dock="Top" Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+        <Border DockPanel.Dock="Top" Padding="12,8" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource EsoLineBrush}" Background="{DynamicResource EsoSurfaceBrush}">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
                     <Button x:Name="OpenBrowserButton" Content="Open in browser" Click="OnOpenBrowserClick" IsEnabled="False" />
@@ -18,37 +38,75 @@
                     <Image Source="avares://EsoAgent.App/Assets/app-icon.png" Width="34" Height="34" VerticalAlignment="Center" />
                     <StackPanel Spacing="2" VerticalAlignment="Center">
                         <TextBlock Text="EsoAgent" FontSize="18" FontWeight="SemiBold" />
-                        <TextBlock x:Name="ConfigStateText" Opacity="0.75" />
-                        <TextBlock x:Name="VersionText" Opacity="0.5" FontSize="11" />
+                        <TextBlock x:Name="ConfigStateText" Classes="muted" />
+                        <TextBlock x:Name="VersionText" Classes="muted" FontSize="11" />
                     </StackPanel>
                 </StackPanel>
             </DockPanel>
         </Border>
-        <TextBlock x:Name="StatusBarText" DockPanel.Dock="Bottom" Margin="12,6" Opacity="0.75" />
-        <ListBox x:Name="DevicesList" DockPanel.Dock="Left" Width="330" SelectionChanged="OnDeviceSelected">
-            <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="app:DeviceItem">
-                    <StackPanel Spacing="2" Margin="4">
-                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding DetailLine}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="●" Foreground="LimeGreen" IsVisible="{Binding Online}" />
-                            <TextBlock Text="●" Foreground="Gray" IsVisible="{Binding !Online}" />
-                            <TextBlock Text="{Binding StatusLine}" FontSize="12" />
-                            <Border Background="DarkGoldenrod" CornerRadius="3" Padding="5,1" IsVisible="{Binding IsPending}">
-                                <TextBlock Text="PENDING" FontSize="11" Foreground="White" />
-                            </Border>
-                            <Border Background="DarkOrange" CornerRadius="3" Padding="5,1" IsVisible="{Binding ShowHealthWarn}">
-                                <TextBlock Text="⚠ HEALTH" FontSize="11" Foreground="White" />
-                            </Border>
-                            <Border Background="DarkRed" CornerRadius="3" Padding="5,1" IsVisible="{Binding ShowHealthFail}">
-                                <TextBlock Text="✖ HEALTH" FontSize="11" Foreground="White" />
-                            </Border>
-                        </StackPanel>
-                    </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+        <TextBlock x:Name="StatusBarText" DockPanel.Dock="Bottom" Margin="12,6" Classes="muted" />
+        <DockPanel DockPanel.Dock="Left" Width="372" Margin="8,8,0,8">
+            <!-- Home: this device's identity, connect-by-code, recents, search — the connect flow lives here. -->
+            <Border Classes="card" DockPanel.Dock="Top" Margin="0,0,0,8">
+                <StackPanel Spacing="4">
+                    <TextBlock x:Name="ThisDeviceLabel" Text="THIS DEVICE" FontSize="11" Classes="muted" />
+                    <TextBlock x:Name="IdentityNameText" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="IdentityCodeText" FontSize="26" FontWeight="Bold" Text="—" />
+                    <TextBlock x:Name="IdentityDetailText" Classes="muted" TextWrapping="Wrap" />
+                    <Button x:Name="PairButton" Classes="accent" HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnPairClick" />
+                </StackPanel>
+            </Border>
+            <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+                <TextBlock x:Name="ConnectByCodeLabel" FontWeight="SemiBold" />
+                <DockPanel>
+                    <Button x:Name="CodeConnectButton" Classes="accent" DockPanel.Dock="Right" Margin="8,0,0,0" Click="OnCodeConnectClick" />
+                    <TextBox x:Name="CodeBox" KeyDown="OnCodeBoxKeyDown" />
+                </DockPanel>
+                <TextBlock x:Name="CodeStateText" Foreground="{DynamicResource EsoBadTextColor}" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel x:Name="RecentsBlock" DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8" IsVisible="False">
+                <TextBlock x:Name="RecentLabel" FontWeight="SemiBold" />
+                <WrapPanel x:Name="RecentsPanel" Orientation="Horizontal" />
+            </StackPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                <ComboBox x:Name="GroupFilterBox" DockPanel.Dock="Right" Margin="8,0,0,0" MinWidth="110" SelectionChanged="OnGroupFilterChanged" />
+                <TextBox x:Name="SearchBox" TextChanged="OnSearchChanged" />
+            </DockPanel>
+            <ListBox x:Name="DevicesList" SelectionChanged="OnDeviceSelected" DoubleTapped="OnDeviceDoubleTapped"
+                     Background="Transparent">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="app:DeviceItem">
+                        <Grid ColumnDefinitions="*,Auto" Margin="2">
+                            <StackPanel Spacing="2" Margin="4">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding DetailLine}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="●" Foreground="LimeGreen" IsVisible="{Binding Online}" />
+                                    <TextBlock Text="●" Foreground="Gray" IsVisible="{Binding !Online}" />
+                                    <TextBlock Text="{Binding StatusLine}" FontSize="12" />
+                                    <Border Background="DarkGoldenrod" CornerRadius="3" Padding="5,1" IsVisible="{Binding IsPending}">
+                                        <TextBlock Text="PENDING" FontSize="11" Foreground="White" />
+                                    </Border>
+                                    <Border Background="DarkOrange" CornerRadius="3" Padding="5,1" IsVisible="{Binding ShowHealthWarn}">
+                                        <TextBlock Text="⚠ HEALTH" FontSize="11" Foreground="White" />
+                                    </Border>
+                                    <Border Background="DarkRed" CornerRadius="3" Padding="5,1" IsVisible="{Binding ShowHealthFail}">
+                                        <TextBlock Text="✖ HEALTH" FontSize="11" Foreground="White" />
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center" Margin="6,0,2,0">
+                                <Button Content="{Binding StarText}" Click="OnRowStarClick" Padding="7,1" HorizontalAlignment="Right" />
+                                <Button Content="{Binding ConnectLabel}" Classes="accent" Click="OnRowConnectClick"
+                                        IsVisible="{Binding CanConnect}" Padding="10,3" />
+                                <Button Content="{Binding ApproveLabel}" Click="OnRowApproveClick"
+                                        IsVisible="{Binding IsPending}" Padding="10,3" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
         <TabControl x:Name="MainTabs" Margin="4">
             <TabItem x:Name="StatusTabItem" Header="Status">
                 <v:StatusView x:Name="StatusTab" />

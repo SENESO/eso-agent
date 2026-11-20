@@ -44,6 +44,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
       - name: Publish win-x64 (agent + tray + app + client + server)
         shell: pwsh
         run: |
@@ -56,6 +59,12 @@ jobs:
           dotnet publish src/EsoAgent.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-app-windows --nologo -v q
           dotnet publish src/EsoAgent.Client -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-client-windows --nologo -v q
           dotnet publish src/EsoAgent.Server -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-server-windows --nologo -v q
+          # Embedded mesh engine: eso-mesh.exe built from pinned wireguard-go
+          # source + the hash-verified official wintun.dll. The Windows
+          # package must never ship without them (no external WireGuard
+          # install exists in the product); a failure here fails the release.
+          & scripts/build-mesh-engine.ps1 -Out payload
+          & scripts/fetch-wintun.ps1 -Out payload
           "$v" | Out-File -NoNewline payload/esoagent-version.txt
           Compress-Archive -Path payload/* -DestinationPath dist/esoagent-windows.zip
       - name: Build the installer (Inno Setup)

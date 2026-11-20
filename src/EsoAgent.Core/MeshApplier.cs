@@ -36,16 +36,45 @@ public sealed class WgIdentity
 /// Applies mesh state pushed by the fleet server: persists it, regenerates the
 /// WireGuard config, reloads the platform tunnel, syncs the hosts file
 /// (MagicDNS-lite), applies the compiled firewall plan, and (re)starts relay
-/// shims. Every step is best-effort and audited; a missing WireGuard install is
-/// reported honestly in the status, never faked.
+/// shims. Every step is best-effort and audited; failures are reported
+/// honestly in the status, never faked. On Windows the tunnel is the embedded
+/// engine (MeshEngineSupervisor — eso-mesh.exe + wintun.dll ship inside our
+/// own installer; there is no external WireGuard dependency). On Linux the
+/// tunnel still runs through wg-quick (see MESH-EMBED-REPORT.md for the
+/// follow-up that retires that too).
 /// </summary>
 public sealed class MeshApplier
 {
     private readonly AgentState _state;
     private readonly RelayShimSet _shims = new();
+    private MeshEngineSupervisor? _engine;
     public string Status { get; private set; } = "mesh not configured";
 
     public MeshApplier(AgentState state) => _state = state;
+
+    /// <summary>
+    /// The embedded engine supervisor (Windows), created on first use. The
+    /// engine binary ships inside our own installer next to the agent
+    /// (eso-mesh.exe + wintun.dll) — no external WireGuard install exists in
+    /// the product anymore (owner product law, 2026-11-20).
+    /// </summary>
+    private MeshEngineSupervisor Engine
+    {
+        get
+        {
+            if (_engine != null) return _engine;
+            var config = _state.Config;
+            var enginePath = !string.IsNullOrWhiteSpace(config.Mesh.EnginePath)
+                ? config.Mesh.EnginePath!
+                : Path.Combine(AppContext.BaseDirectory, "eso-mesh.exe");
+            _engine = new MeshEngineSupervisor(
+                enginePath,
+                _state.Platform.ProcessRunner,
+                audit: (message, status) => _state.Audit.Write("mesh", message, status),
+                logFilePath: Path.Combine(config.DataDir, "logs", "mesh-engine.log"));
+            return _engine;
+        }
+    }
 
     public async Task ApplyAsync(FleetMeshFrame frame, CancellationToken ct = default)
     {
@@ -58,6 +87,12 @@ public sealed class MeshApplier
 
         if (!config.Mesh.Enabled)
         {
+            // Mesh was on and is now off in config: tear the tunnel down
+            // cleanly instead of leaving an engine running behind.
+            if (_engine != null && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                try { await _engine.StopAsync(ct); } catch { /* best-effort teardown */ }
+            }
             Status = "mesh state received but mesh is disabled in config";
             audit.Write("mesh", $"state received (vip={frame.YourVirtualIp}, peers={frame.Peers.Count}) — mesh disabled in config", "ok");
             return;
@@ -72,8 +107,8 @@ public sealed class MeshApplier
             var useExit = config.Mesh.UseExitNode && frame.ExitNodeCode != null
                           && !frame.ExitNodeCode.Equals(_state.Device?.Code, StringComparison.OrdinalIgnoreCase)
                 ? frame.ExitNodeCode : null;
-            var text = WgConfigBuilder.Build(wg.PrivateKeyB64, frame.YourVirtualIp, config.Mesh.ListenPort, frame.Peers, config.Mesh.RelayShimBasePort, useExit);
-            notes.Add(await ApplyTunnelAsync(text, ct));
+            var model = WgConfigBuilder.BuildModel(wg.PrivateKeyB64, frame.YourVirtualIp, config.Mesh.ListenPort, frame.Peers, config.Mesh.RelayShimBasePort, useExit);
+            notes.Add(await ApplyTunnelAsync(model, ct));
             if (useExit != null) notes.Add($"exit-node: routing all traffic via {frame.ExitNodeCode}");
         }
         catch (Exception ex) { notes.Add($"tunnel: {ex.Message}"); }
@@ -159,18 +194,17 @@ public sealed class MeshApplier
         audit.Write("mesh", $"applied vip={frame.YourVirtualIp} peers={frame.Peers.Count} — {Status}", "ok");
     }
 
-    private async Task<string> ApplyTunnelAsync(string configText, CancellationToken ct)
+    private async Task<string> ApplyTunnelAsync(WgInterfaceConfig model, CancellationToken ct)
     {
         var runner = _state.Platform.ProcessRunner;
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            var wgExe = FindOnPath("wireguard.exe");
-            if (wgExe == null) return "tunnel: WireGuard for Windows not installed (config generated only)";
+            // Keep the rendered .conf in the data dir for inspection/debugging;
+            // the engine itself is configured from the model over UAPI.
             var path = Path.Combine(_state.Config.DataDir, "eso0.conf");
-            await File.WriteAllTextAsync(path, configText, ct);
-            await runner.RunAsync(new ExecRequest { File = wgExe, Args = new[] { "/uninstalltunnelservice", "eso0" }, TimeoutMs = 30_000 }, ct);
-            var install = await runner.RunAsync(new ExecRequest { File = wgExe, Args = new[] { "/installtunnelservice", path }, TimeoutMs = 60_000 }, ct);
-            return install.ExitCode == 0 ? "tunnel: WireGuard tunnel service (re)installed" : $"tunnel: wireguard.exe exited {install.ExitCode}";
+            await File.WriteAllTextAsync(path, WgConfigBuilder.RenderText(model), ct);
+            var result = await Engine.ApplyAsync(model, ct);
+            return result.Summary;
         }
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
@@ -178,7 +212,7 @@ public sealed class MeshApplier
             if (wgQuick == null) return "tunnel: wg-quick not installed (config generated only)";
             var path = _state.Config.Mesh.WgConfigPath;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllTextAsync(path, configText, ct);
+            await File.WriteAllTextAsync(path, WgConfigBuilder.RenderText(model), ct);
             var name = Path.GetFileNameWithoutExtension(path);
             await runner.RunAsync(new ExecRequest { File = wgQuick, Args = new[] { "down", name }, TimeoutMs = 30_000 }, ct);
             var up = await runner.RunAsync(new ExecRequest { File = wgQuick, Args = new[] { "up", name }, TimeoutMs = 60_000 }, ct);
@@ -195,12 +229,6 @@ public sealed class MeshApplier
             if (string.IsNullOrWhiteSpace(dir)) continue;
             var candidate = Path.Combine(dir, exe);
             if (File.Exists(candidate)) return candidate;
-        }
-        // Common Windows install location not always on PATH for services.
-        if (exe == "wireguard.exe")
-        {
-            var common = @"C:\Program Files\WireGuard\wireguard.exe";
-            if (File.Exists(common)) return common;
         }
         return null;
     }

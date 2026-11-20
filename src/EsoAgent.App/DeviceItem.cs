@@ -22,6 +22,19 @@ public sealed class DeviceItem
     public bool IsFleet => Code != null;
     public bool IsPending => State == "Pending";
 
+    /// <summary>Pinned to the top of the list by the operator (app-local state, persisted by the shell).</summary>
+    public bool IsFavourite { get; set; }
+    public string StarText => IsFavourite ? "★" : "☆";
+
+    /// <summary>A desktop session can be started on approved fleet devices and on the direct device.
+    /// Pending devices get the Approve action instead; rejected devices get neither.</summary>
+    public bool CanConnect => !IsFleet || State == "Approved";
+
+    /// <summary>Row action labels, read from the string table when the row is
+    /// rendered (the shell re-renders rows on a language switch).</summary>
+    public string ConnectLabel => Strings.T("Connect");
+    public string ApproveLabel => Strings.T("Approve");
+
     public string Title => IsFleet ? $"{Name}  ·  {Code}" : $"{Name}  ·  direct";
     public string StatusLine => Online ? "Online" : "Offline";
     public string DetailLine

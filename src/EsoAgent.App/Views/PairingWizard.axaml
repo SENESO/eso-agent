@@ -1,0 +1,119 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EsoAgent.App.Views.PairingWizard"
+        Title="EsoAgent — Set up" Width="660" Height="600"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource EsoBgBrush}"
+        Foreground="{DynamicResource EsoTextBrush}">
+    <Window.Styles>
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{DynamicResource EsoAccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource EsoOnAccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource EsoSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource EsoLineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource EsoRadiusCard}" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="{DynamicResource EsoMutedBrush}" />
+        </Style>
+    </Window.Styles>
+    <DockPanel Margin="20">
+        <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,12">
+            <TextBlock x:Name="TitleText" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock x:Name="StepLineText" Classes="muted" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Spacing="8">
+            <TextBlock x:Name="ErrorText" Foreground="{DynamicResource EsoBadTextColor}" TextWrapping="Wrap" />
+            <DockPanel>
+                <Button x:Name="AdvancedButton" DockPanel.Dock="Left" Click="OnAdvancedClick" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="BackButton" Click="OnBackClick" />
+                    <Button x:Name="NextButton" Classes="accent" Click="OnNextClick" />
+                    <Button x:Name="FinishButton" Classes="accent" Click="OnFinishClick" IsVisible="False" />
+                </StackPanel>
+                <Border />
+            </DockPanel>
+        </StackPanel>
+
+        <ScrollViewer>
+            <Panel>
+                <!-- Step 1: role -->
+                <StackPanel x:Name="Step1Panel" Spacing="10">
+                    <TextBlock x:Name="Step1Heading" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <Border Classes="card">
+                        <StackPanel Spacing="4">
+                            <RadioButton x:Name="RoleControlRadio" GroupName="role" IsChecked="True" />
+                            <TextBlock x:Name="RoleControlDescText" Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="card">
+                        <StackPanel Spacing="4">
+                            <RadioButton x:Name="RoleBothRadio" GroupName="role" />
+                            <TextBlock x:Name="RoleBothDescText" Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="card">
+                        <StackPanel Spacing="4">
+                            <RadioButton x:Name="RoleHostRadio" GroupName="role" />
+                            <TextBlock x:Name="RoleHostDescText" Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="HostGuideText" TextWrapping="Wrap" IsVisible="False" />
+                </StackPanel>
+
+                <!-- Step 2: fleet or standalone -->
+                <StackPanel x:Name="Step2Panel" Spacing="10" IsVisible="False">
+                    <TextBlock x:Name="Step2Heading" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <RadioButton x:Name="PairFleetRadio" GroupName="pair" IsChecked="True" />
+                        <RadioButton x:Name="PairStandaloneRadio" GroupName="pair" />
+                    </StackPanel>
+                    <StackPanel x:Name="FleetPanel" Spacing="10">
+                        <TextBlock x:Name="FleetAddressLabel" Classes="muted" />
+                        <DockPanel>
+                            <Button x:Name="ProbeButton" DockPanel.Dock="Right" Margin="8,0,0,0" Click="OnProbeClick" />
+                            <TextBox x:Name="FleetAddressBox" />
+                        </DockPanel>
+                        <TextBlock x:Name="ProbeStateText" Classes="muted" TextWrapping="Wrap" />
+                        <Border x:Name="VerifyPanel" Classes="card" IsVisible="False">
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="VerifyLabelText" TextWrapping="Wrap" />
+                                <TextBlock x:Name="VerificationCodeText" FontSize="24" FontWeight="Bold" />
+                                <Button x:Name="VerifyMatchesButton" Classes="accent" HorizontalAlignment="Left" Click="OnVerifyMatchesClick" />
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="KeyPanel" Classes="card" IsVisible="False">
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="KeyLabelText" TextWrapping="Wrap" />
+                                <TextBox x:Name="PublicKeyBox" IsReadOnly="True" TextWrapping="Wrap" MinHeight="52" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="CreateKeyButton" Click="OnCreateKeyClick" IsVisible="False" />
+                                    <Button x:Name="CopyKeyButton" Click="OnCopyKeyClick" />
+                                    <TextBlock x:Name="KeyStateText" Classes="muted" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="TestButton" Click="OnTestClick" IsEnabled="False" />
+                            <TextBlock x:Name="TestStateText" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock x:Name="StandaloneNoteText" TextWrapping="Wrap" IsVisible="False" />
+                </StackPanel>
+
+                <!-- Step 3: name + finish -->
+                <StackPanel x:Name="Step3Panel" Spacing="10" IsVisible="False">
+                    <TextBlock x:Name="Step3Heading" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="NameLabelText" Classes="muted" />
+                    <TextBox x:Name="ConsoleNameBox" />
+                    <TextBlock x:Name="SummaryText" TextWrapping="Wrap" />
+                </StackPanel>
+            </Panel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

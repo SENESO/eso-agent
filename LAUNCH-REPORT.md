@@ -1325,3 +1325,50 @@ the up process left running and waiting). After approval: restart
 esoagent-server (binder adds the tailnet interface; verify :8740 on
 tailnet IP + loopback only), then laptop enrollment + the two-device
 proofs. Full record: FLEET-MOVE-REPORT.md.
+
+## 20. Fleet enrollment COMPLETE — the laptop joined the tailnet fleet (2026-11-20)
+
+The §19 gate cleared: Eslam approved device **simular-box** on his
+Tailscale account (~11:15 Cairo). The box's tailnet join completed
+(BackendState Running, tailnet IP 100.98.165.106, TUN mode).
+esoagent-server restarted — :8740 now listens on loopback + the box
+tailnet IP only (never a public interface), and the box agent
+reconnected by itself, still Approved with mesh VIP 10.77.0.2.
+
+One real blocker fell out of the laptop's first connect attempts and
+was root-caused by packet capture: Simular's own nftables table
+(`inet cocoonbox`, input policy drop — loopback + established only)
+silently discards inbound traffic on tailscale0; the laptop's SYNs
+arrived and nothing returned. Fix: a single inserted accept rule for
+tcp/8740 on tailscale0, persisted as boot unit eso-ts-firewall.service
+(same pattern as eso-dummy-net). The laptop connected on its next
+retry.
+
+Enrollment: fresh one-time key minted by the operator CLI, server
+fingerprint pinned in the laptop's config (the value recorded
+nowhere), mesh enabled; only the EsoAgent service restarted. The
+laptop was auto-approved at hello — the enrollment-key design — as
+device **GY37-HEX3 "ESO" (Windows), mesh VIP 10.77.0.3, online**.
+Proofs: registry lists both devices Approved + online; the fleet
+panel answers over the tailnet from the laptop itself (/panel/login
+serves, /panel redirects to it); an operator-signed `status` relayed
+through the server returned the laptop's real machine data with
+"fleet: connected: True". 
+
+Still open, with the wall named: **mesh peer traffic** — VIPs and
+WireGuard keys are assigned/exchanged, but no tunnel exists because
+WireGuard for Windows is not installed on ESO (the agent reports
+"config generated only") and the server's mesh relay endpoint is not
+configured; the DXGI desktop proof stays queued behind that per the
+verification gate. Full record: FLEET-MOVE-REPORT.md (completion
+section).
+
+## 21. Release v1.2.4 — light panels, single-instance, app icon (2026-11-20)
+
+Contents: UI Phase 0+1 (light web panels from one token source, native dialogs/toasts, fleet Overview home, real tables), the tray/App single-instance fix, and the golden-wing app icon (assets/brand/app.ico in all exes + installer shortcuts).
+
+Process lesson (recorded): the version stamp lives in Directory.Build.props + installer/windows/EsoAgent.iss and must be bumped IN the ship commit. The first v1.2.4 run (#9, commit 2ada2fe) shipped assets mis-stamped 1.2.3; that release + tag were deleted, the bump commit eefb086 was pushed, and run #10 re-released v1.2.4 correctly. Installer: EsoAgent-Setup-1.2.4.exe, 124,660,185 B, SHA-256 dcd7e2904bc5bce3f181ac248845ef2fe60adde74473d8ec657aadf92d24f87e (verified byte-identical after download on ESO).
+
+Laptop upgrade (over 1.2.3, silent, existing owner password): installer exit 0, esoagent-version.txt = 1.2.4, service Running. On-device verifications PASS: agent login page serves the new light theme (--bg #F7F5F1, no #0d1117); app.ico present (44,144 B) and the Public Desktop shortcut's IconLocation points at it; App launched x3 -> exactly 1 EsoAgent.App process; Tray launched x2 -> exactly 1 EsoAgent.Tray process.
+
+DEFECT FOUND + FIXED during the upgrade: install.ps1 rewrote data/esoagent.json with defaults, resetting fleet.enabled=false and dropping the laptop off the fleet (last heartbeat = the install minute). The pre-install backup (D:\ivmp-work\eso-backup-124) restored the enrolled config; service restarted; heartbeat verified live on the server seconds later. ROOT FIX REQUIRED in the next release: the installer must preserve an existing esoagent.json on upgrade (only seed defaults on a fresh install). Fleet enrollment, device identity and owner credential were otherwise untouched.

@@ -102,6 +102,10 @@ public sealed class MeshOptions
     public List<string> AdvertisedSubnets { get; set; } = new();
     /// <summary>Where the WireGuard config is written on Linux (wg-quick name derives from the file name).</summary>
     public string WgConfigPath { get; set; } = "/etc/wireguard/eso0.conf";
+    /// <summary>Windows embedded-engine override: full path of the bundled
+    /// eso-mesh.exe sidecar. Null = the copy installed next to the agent
+    /// executable (the normal case; the installer stages it there).</summary>
+    public string? EnginePath { get; set; }
     /// <summary>First loopback port for per-peer relay shims.</summary>
     public int RelayShimBasePort { get; set; } = 51821;
     /// <summary>Exit node (v1.2): when true AND the fleet has a designated exit

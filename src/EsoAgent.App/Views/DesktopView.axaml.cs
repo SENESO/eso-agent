@@ -63,6 +63,11 @@ public sealed partial class DesktopView : UserControl
     /// <summary>Called by the main window when the selection changes or the window closes.</summary>
     public void Detach() => _ = DisconnectCoreAsync();
 
+    /// <summary>Programmatic session start for the shell's one-click Connect
+    /// (device rows, connect-by-code, recents, double-click). The exact same
+    /// path as the Connect button — Attach must have selected the device first.</summary>
+    public Task StartSessionAsync() => ConnectAsync();
+
     // ---------- connect / disconnect ----------
 
     private async void OnConnectClick(object? sender, RoutedEventArgs e) => await ConnectAsync();

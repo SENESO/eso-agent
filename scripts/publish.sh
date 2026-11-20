@@ -28,6 +28,13 @@ echo "== Windows service + tray (win-x64) =="
 pub src/EsoAgent.Windows win-x64 "$DIST/pkg-windows"
 pub src/EsoAgent.Tray win-x64 "$DIST/pkg-windows"
 cp install/install.ps1 install/uninstall.ps1 install/update-apply.ps1 "$DIST/pkg-windows/"
+echo "== Embedded mesh engine (eso-mesh.exe + wintun.dll) =="
+# The Windows package must never ship without the embedded engine: a missing
+# Go toolchain or a failed hash check aborts the publish (set -e) rather
+# than silently reintroducing the external WireGuard dependency.
+# GO=/path/to/go overrides the toolchain (default: go on PATH).
+bash "$ROOT/scripts/build-mesh-engine.sh" --out "$DIST/pkg-windows"
+bash "$ROOT/scripts/fetch-wintun.sh" --out "$DIST/pkg-windows"
 echo "$VERSION" > "$DIST/pkg-windows/esoagent-version.txt"
 (cd "$DIST/pkg-windows" && zip -qr "$DIST/esoagent-windows.zip" .)
 

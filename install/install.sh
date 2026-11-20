@@ -41,16 +41,25 @@ install -m 0755 "$SRC/update-apply.sh" "$INSTALL_DIR/update-apply.sh" 2>/dev/nul
   install -m 0755 "$SRC/linux/update-apply.sh" "$INSTALL_DIR/update-apply.sh"
 
 # --- config ---
-FLEET_ENABLED=false
-[[ -n "$FLEET_URL" ]] && FLEET_ENABLED=true
-cat > "$DATA_DIR/esoagent.json" <<EOF
+# PRESERVE an existing config (same rule as install.ps1): an upgrade
+# must never wipe a fleet enrollment (fleet.enabled, server URL,
+# fingerprint) by reseeding defaults over it - see LAUNCH-REPORT.md
+# s.21 for the Windows incident this rule comes from. Defaults are
+# written ONLY on a fresh install, when no esoagent.json exists yet.
+if [[ -f "$DATA_DIR/esoagent.json" ]]; then
+  echo "Existing config preserved (upgrade): $DATA_DIR/esoagent.json - enrollment and settings untouched."
+else
+  FLEET_ENABLED=false
+  [[ -n "$FLEET_URL" ]] && FLEET_ENABLED=true
+  cat > "$DATA_DIR/esoagent.json" <<EOF
 {
   "port": $PORT,
   "fleet": { "enabled": $FLEET_ENABLED, "serverUrl": "$FLEET_URL", "serverFingerprint": "$FLEET_FP", "enrollmentKey": "$ENROLL_KEY" },
   "mesh": { "enabled": $MESH }
 }
 EOF
-chmod 600 "$DATA_DIR/esoagent.json"
+  chmod 600 "$DATA_DIR/esoagent.json"
+fi
 
 # --- API token (256-bit) ---
 if [[ ! -f "$DATA_DIR/token" ]]; then
