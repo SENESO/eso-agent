@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -78,6 +79,11 @@ public sealed partial class MainWindow : Window
     private List<RecentEntry> _recents = new();
     private string? _consoleName;
     private bool _fleetReachable;
+    // ----- local-agent discovery (v1.2.7): the link file this machine's own
+    // agent publishes in its data dir, and the console-key approval state.
+    private ConsoleLink? _localLink;
+    private bool _awaitingApproval;
+    private string? _consolePublicKey;
     private bool _buildingGroups;
     private bool _wizardAutoShown;
 
@@ -94,7 +100,7 @@ public sealed partial class MainWindow : Window
         Opened += async (_, _) =>
         {
             ReloadConfig();
-            if (_cfg == null && !_wizardAutoShown)
+            if (_cfg == null && _localLink == null && !_wizardAutoShown)
             {
                 // First run: the pairing wizard is the front door now — the
                 // raw config editor is behind its Advanced entry.
@@ -179,6 +185,9 @@ public sealed partial class MainWindow : Window
         ActivityTabItem.Header = Strings.T("Activity");
         AccessTabItem.Header = Strings.T("Access");
         PairButton.Content = Strings.T("PairDevice");
+        UseFleetButton.Content = Strings.T("UseThisFleet");
+        CopyKeyButton.Content = Strings.T("Copy");
+        AwaitingApprovalText.Text = Strings.T("AwaitingApproval");
         ThisDeviceLabel.Text = Strings.T("ThisDevice");
         ConnectByCodeLabel.Text = Strings.T("ConnectByCode");
         CodeConnectButton.Content = Strings.T("Connect");
@@ -214,16 +223,40 @@ public sealed partial class MainWindow : Window
 
     private void ReloadConfig()
     {
+        // Local-agent discovery first: the link file decides what the
+        // unpaired states look like (real code + one-click offer vs the
+        // plain pairing state).
+        _localLink = ConsoleLink.TryRead(ConsoleLink.PathForDataDir(AgentConfig.DefaultDataDir()));
         try
         {
             _cfg = ClientConfig.Load(_configPath);
             ConfigStateText.Text = $"Direct device: {_cfg.Host}:{_cfg.Port}"
                 + (string.IsNullOrWhiteSpace(_cfg.FleetUrl) ? " · no fleet configured" : $" · fleet: {_cfg.FleetUrl}");
             StatusBarText.Text = $"Config: {_configPath}";
+            _consolePublicKey = null;
+            if (!string.IsNullOrWhiteSpace(_cfg.OperatorKeyFile) && File.Exists(_cfg.OperatorKeyFile))
+            {
+                try { _consolePublicKey = PairingSupport.EnsureOperatorKey(_cfg.OperatorKeyFile).PublicKeyBase64; }
+                catch { /* the key panel is a convenience; a bad key file must not block startup */ }
+            }
+        }
+        catch (FileNotFoundException)
+        {
+            // A missing client.json is the normal unpaired STATE, not an
+            // error: the exception's text (a raw path plus a field list)
+            // must never reach the footer (owner order, 2026-11-20).
+            _cfg = null;
+            _consolePublicKey = null;
+            ConfigStateText.Text = _localLink != null
+                ? $"{_localLink.DeviceName} · {_localLink.DeviceCode} · fleet: {_localLink.FleetUrl}"
+                : Strings.T("NotPairedHint");
+            StatusBarText.Text = "";
         }
         catch (Exception ex)
         {
+            // A config that exists but is broken is a real error — surface it.
             _cfg = null;
+            _consolePublicKey = null;
             ConfigStateText.Text = Strings.T("NotPairedHint");
             StatusBarText.Text = ex.Message;
         }
@@ -250,6 +283,7 @@ public sealed partial class MainWindow : Window
                 using var fleet = EsoAgent.Client.Program.CreateFleetClient(_cfg);
                 var devices = await fleet.GetDevicesAsync();
                 _fleetReachable = true;
+                _awaitingApproval = false;
                 items = devices.Select(DeviceItem.FromFleet).ToList();
                 var badge = "";
                 try
@@ -276,7 +310,18 @@ public sealed partial class MainWindow : Window
             {
                 _fleetReachable = false;
                 items = new List<DeviceItem> { DeviceItem.Direct(_cfg.Host) };
-                StatusBarText.Text = $"Fleet unreachable ({ex.Message}) — showing the direct device only.";
+                if (IsAuthFailure(ex))
+                {
+                    // The server ANSWERED — it just does not trust this
+                    // console's operator key yet. That is the calm approval
+                    // state, not a connectivity failure.
+                    _awaitingApproval = true;
+                    StatusBarText.Text = Strings.T("AwaitingApprovalStatus");
+                }
+                else
+                {
+                    StatusBarText.Text = $"Fleet unreachable ({ex.Message}) — showing the direct device only.";
+                }
                 AppTray.SetOnline(false);
             }
         }
@@ -370,6 +415,10 @@ public sealed partial class MainWindow : Window
     {
         if (IdentityNameText == null) return;
         IdentityNameText.Text = !string.IsNullOrWhiteSpace(_consoleName) ? _consoleName! : Environment.MachineName;
+        UseFleetButton.IsVisible = false;
+        PairButton.IsVisible = true;
+        AwaitingApprovalPanel.IsVisible = _awaitingApproval && _consolePublicKey != null;
+        if (_consolePublicKey != null) ConsoleKeyBox.Text = _consolePublicKey;
         var self = PairingSupport.FindThisDevice(_allDevices);
         if (self != null)
         {
@@ -377,6 +426,18 @@ public sealed partial class MainWindow : Window
             var parts = new List<string> { self.Online ? "Online" : "Offline" };
             if (self.VirtualIp != null) parts.Add($"mesh {self.VirtualIp}");
             IdentityDetailText.Text = string.Join(" · ", parts);
+        }
+        else if (_cfg == null && _localLink != null)
+        {
+            // No console pairing yet, but THIS machine's own agent is
+            // fleet-enrolled (it published a console link): show its real
+            // code and offer the one-click adoption — never the bare "—"
+            // and "not paired" the owner photographed on his laptop.
+            if (string.IsNullOrWhiteSpace(_consoleName)) IdentityNameText.Text = _localLink.DeviceName;
+            IdentityCodeText.Text = _localLink.DeviceCode;
+            IdentityDetailText.Text = Strings.T("LocalAgentFound");
+            UseFleetButton.IsVisible = true;
+            PairButton.IsVisible = false;
         }
         else if (_cfg == null)
         {
@@ -386,9 +447,11 @@ public sealed partial class MainWindow : Window
         else
         {
             IdentityCodeText.Text = "—";
-            IdentityDetailText.Text = !string.IsNullOrWhiteSpace(_cfg.FleetUrl)
-                ? $"{_cfg.FleetUrl} · {Strings.T(_fleetReachable ? "FleetReachable" : "FleetNotReached")} · {Strings.T("ThisPcNotEnrolled")}"
-                : $"{Strings.T("DirectMode")}: {_cfg.Host}:{_cfg.Port}";
+            IdentityDetailText.Text = _awaitingApproval
+                ? Strings.T("AwaitingApprovalStatus")
+                : !string.IsNullOrWhiteSpace(_cfg.FleetUrl)
+                    ? $"{_cfg.FleetUrl} · {Strings.T(_fleetReachable ? "FleetReachable" : "FleetNotReached")} · {Strings.T("ThisPcNotEnrolled")}"
+                    : $"{Strings.T("DirectMode")}: {_cfg.Host}:{_cfg.Port}";
         }
     }
 
@@ -522,6 +585,65 @@ public sealed partial class MainWindow : Window
     }
 
     private async void OnPairClick(object? sender, RoutedEventArgs e) => await OpenWizardAsync();
+
+    /// <summary>The fleet client surfaces HTTP failures as an
+    /// HttpRequestException carrying the status code ("Fleet server
+    /// returned 401: ..."). A 401/403 from the fleet API means the server
+    /// was REACHED but this console's operator key is not trusted yet —
+    /// the approval state, not a connectivity failure.</summary>
+    private static bool IsAuthFailure(Exception ex)
+        => ex is HttpRequestException
+           && (ex.Message.Contains("returned 401") || ex.Message.Contains("returned 403"));
+
+    /// <summary>One-click adoption of this machine's own fleet (v1.2.7):
+    /// everything the pairing wizard does for the fleet path, sourced
+    /// from the local agent's console link instead of typed input —
+    /// ensure the operator key (never overwritten), take the fleet
+    /// address + certificate pin from the link (probing the pin only when
+    /// the link carries none), write client.json, then try the fleet.
+    /// An untrusted key lands in the calm approval state with the public
+    /// key ready to copy; success is claimed only when the fleet answers.</summary>
+    private async void OnUseFleetClick(object? sender, RoutedEventArgs e)
+    {
+        var link = _localLink;
+        if (link == null) return;
+        UseFleetButton.IsEnabled = false;
+        try
+        {
+            var keyPath = PairingSupport.DefaultOperatorKeyPath();
+            var (_, publicKey) = PairingSupport.EnsureOperatorKey(keyPath);
+            _consolePublicKey = publicKey;
+            var fingerprint = link.FleetFingerprint;
+            if (string.IsNullOrWhiteSpace(fingerprint))
+                fingerprint = await PairingSupport.ProbeFingerprintAsync(link.FleetUrl);
+            var cfg = AppConfig.LoadForEdit(_configPath);
+            if (Uri.TryCreate(link.FleetUrl, UriKind.Absolute, out var fleetUri))
+                cfg.Host = fleetUri.Host; // ClientConfig.Load requires a host; fleet-only installs point it at the fleet host
+            cfg.FleetUrl = link.FleetUrl;
+            cfg.FleetFingerprint = fingerprint;
+            cfg.OperatorKeyFile = keyPath;
+            cfg.Save(_configPath);
+            ReloadConfig();
+            await RefreshDevicesAsync(); // success pairs fully; a 401 sets the approval state — neither is faked
+        }
+        catch (Exception ex)
+        {
+            StatusBarText.Text = $"{Strings.T("ProbeFailedPrefix")}{ex.Message}";
+        }
+        finally
+        {
+            UseFleetButton.IsEnabled = true;
+            UpdateIdentityCard();
+        }
+    }
+
+    private async void OnCopyKeyClick(object? sender, RoutedEventArgs e)
+    {
+        if (_consolePublicKey == null) return;
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard != null) await clipboard.SetTextAsync(_consolePublicKey);
+        StatusBarText.Text = Strings.T("Copied");
+    }
 
     private async Task OpenWizardAsync()
     {

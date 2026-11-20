@@ -4,6 +4,38 @@ All notable changes to EsoAgent are documented here. The project follows
 semantic versioning; the version lives in one place (`Directory.Build.props`)
 and is stamped on every surface — agent, fleet server, client, and app.
 
+## [1.2.7] — 2026-11-20
+
+- **First-run console discovery** — the agent publishes a small non-secret
+  `console-link.json` in its data directory (device code and name, fleet
+  address, fleet certificate pin, agent version — no tokens, no keys),
+  refreshed as enrollment state changes. The desktop app reads it at
+  startup: on a machine whose own agent is enrolled, THIS DEVICE shows the
+  real device code and offers one click — "Use this device's fleet" —
+  which creates the console's operator key on the spot, takes the fleet
+  address and pin from the link, writes the console config and connects.
+  When the server does not trust the new console key yet, the app waits in
+  a calm "waiting for fleet approval" state with the public key ready to
+  copy instead of reporting a connectivity failure.
+- **No raw config errors in the app** — a missing client.json is the
+  normal unpaired state now; the "Client config not found at ..." file
+  exception no longer reaches the status bar.
+- **Version truth** — AssemblyVersion, FileVersion and
+  InformationalVersion derive from the single `<Version>` in
+  Directory.Build.props. They were pinned at 1.2.1 while the release
+  version moved on, so a 1.2.5 install reported "v1.2.1" in the app;
+  every surface now reports the shipped release, and a bump edits only
+  `<Version>` and the installer define.
+- **Installer closes the app and tray before upgrading** — the installer's
+  PrepareToInstall step terminates EsoAgent.App.exe and EsoAgent.Tray.exe
+  before the file copy, so an upgrade no longer fails mid-copy (exit 5)
+  on their locked files.
+- **Fleet link self-heal** — if the agent connects to the fleet but no
+  state frame arrives within 60 seconds (the connected-but-stalled state
+  seen on the first start after the v1.2.5 upgrade), it drops the
+  connection once and reconnects under the normal backoff instead of
+  waiting for a manual service restart.
+
 ## [1.2.6] — 2026-11-20
 
 - **Mesh relay fix** — the device-side relay shim ran both directions over a

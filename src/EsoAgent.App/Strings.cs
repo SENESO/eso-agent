@@ -58,6 +58,10 @@ public static class Strings
         ["FleetNotReached"] = ("fleet not reached", "الأسطول غير متاح"),
         ["NoDeviceWithCode"] = ("No device with code ", "لا يوجد جهاز بالكود "),
         ["CodeInvalid"] = ("That doesn't look like a device code (XXXX-XXXX).", "هذا لا يشبه كود جهاز (XXXX-XXXX)."),
+        ["UseThisFleet"] = ("Use this device's fleet", "استخدم أسطول هذا الجهاز"),
+        ["LocalAgentFound"] = ("This device is enrolled in the fleet below. Pair this console with one click to see and control your devices.", "هذا الجهاز مسجّل في الأسطول بالأسفل. اربط وحدة التحكم هذه بنقرة واحدة لعرض أجهزتك والتحكم فيها."),
+        ["AwaitingApproval"] = ("Console key ready — waiting for fleet approval. The fleet owner adds this public key (fleet panel → Access):", "مفتاح وحدة التحكم جاهز — في انتظار موافقة الأسطول. يضيف مالك الأسطول هذا المفتاح العام (لوحة الأسطول ← الوصول):"),
+        ["AwaitingApprovalStatus"] = ("Console key ready — waiting for fleet approval (see THIS DEVICE).", "مفتاح وحدة التحكم جاهز — في انتظار موافقة الأسطول (انظر «هذا الجهاز»)."),
 
         // ----- Phase 2: pairing wizard -----
         ["WizTitle"] = ("Set up EsoAgent", "إعداد EsoAgent"),

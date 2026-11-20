@@ -54,6 +54,14 @@
                     <TextBlock x:Name="IdentityCodeText" FontSize="26" FontWeight="Bold" Text="—" />
                     <TextBlock x:Name="IdentityDetailText" Classes="muted" TextWrapping="Wrap" />
                     <Button x:Name="PairButton" Classes="accent" HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnPairClick" />
+                    <Button x:Name="UseFleetButton" Classes="accent" HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnUseFleetClick" IsVisible="False" />
+                    <StackPanel x:Name="AwaitingApprovalPanel" Spacing="4" Margin="0,6,0,0" IsVisible="False">
+                        <TextBlock x:Name="AwaitingApprovalText" Classes="muted" TextWrapping="Wrap" />
+                        <DockPanel>
+                            <Button x:Name="CopyKeyButton" DockPanel.Dock="Right" Margin="8,0,0,0" Click="OnCopyKeyClick" />
+                            <TextBox x:Name="ConsoleKeyBox" IsReadOnly="True" FontSize="11" />
+                        </DockPanel>
+                    </StackPanel>
                 </StackPanel>
             </Border>
             <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">

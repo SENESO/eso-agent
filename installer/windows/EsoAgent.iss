@@ -179,6 +179,25 @@ begin
   end;
 end;
 
+{ Before the file copy: close the desktop app and the tray companion.
+  Both are per-user processes that keep their .exe files locked while
+  they run; an upgrade that skips this fails mid-copy (Inno exit 5,
+  half-replaced binaries — seen live on the v1.2.5 silent upgrade).
+  taskkill exits non-zero when a process is absent, which is the normal
+  case, so the result codes are deliberately ignored. The agent service
+  is stopped by install.ps1 as before; the app relaunches from its
+  shortcut and the tray at next login. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM EsoAgent.App.exe /F',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM EsoAgent.Tray.exe /F',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 { The finish page carries the first-run summary (device code + how
   approval works) written by verify-install.ps1. }
 procedure InitializeWizard();

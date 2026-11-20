@@ -3,9 +3,14 @@
     <!-- THE product version. One source for agent, server, client, app,
          tray and installers (item 45). Bump here only. -->
     <Version>1.2.6</Version>
-    <AssemblyVersion>1.2.1.0</AssemblyVersion>
-    <FileVersion>1.2.1.0</FileVersion>
-    <InformationalVersion>1.2.1</InformationalVersion>
+    <!-- Assembly/File/Informational versions DERIVE from <Version>: a
+         release bump edits <Version> (and the installer .iss) and every
+         stamped surface follows. These were once pinned at 1.2.1 while
+         <Version> moved on, so a 1.2.5 install reported "v1.2.1" in the
+         app (owner report, 2026-11-20) — the pin must never come back. -->
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>

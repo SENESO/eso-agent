@@ -29,6 +29,7 @@ public sealed class FleetClientService : BackgroundService
     private string? _operatorKey;
     private string? _panelKey;
     private string _enrollmentState = "Unknown";
+    private volatile bool _stateFrameSeen;
     private MeshApplier? _meshApplier;
     /// <summary>Live relayed streams (v1.2) by stream id: relayed desktop sessions + tunnels.</summary>
     private readonly ConcurrentDictionary<string, StreamSession> _streams = new();
@@ -46,6 +47,7 @@ public sealed class FleetClientService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         LoadPersistedSigners();
+        RefreshConsoleLink();
         var backoff = TimeSpan.FromSeconds(5);
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -89,6 +91,44 @@ public sealed class FleetClientService : BackgroundService
         catch { }
     }
 
+    /// <summary>
+    /// Publishes (or refreshes) the local console link in the data dir so
+    /// the desktop app on this machine can discover this agent: its fleet
+    /// code, name, fleet address + certificate pin, and version — nothing
+    /// secret (see ConsoleLink). Best-effort by design: a link-file failure
+    /// must never disturb the fleet connection it describes.
+    /// </summary>
+    private void RefreshConsoleLink()
+    {
+        try
+        {
+            var cfg = _state.Config;
+            var device = _state.Device;
+            if (!cfg.Fleet.Enabled || device == null || string.IsNullOrWhiteSpace(cfg.Fleet.ServerUrl)) return;
+            var fleetUrl = ConsoleLink.FleetUrlFromServerUrl(cfg.Fleet.ServerUrl);
+            if (fleetUrl == null) return;
+            ConsoleLink.Write(cfg.ResolvedDataDir, new ConsoleLink
+            {
+                DeviceCode = device.Code,
+                DeviceName = cfg.ResolvedDeviceName,
+                FleetUrl = fleetUrl,
+                FleetFingerprint = (cfg.Fleet.ServerFingerprint ?? "").Trim().ToLowerInvariant(),
+                AgentVersion = ProductInfo.Version,
+            });
+        }
+        catch { }
+    }
+
+    private void RemoveConsoleLink()
+    {
+        try
+        {
+            var path = ConsoleLink.PathForDataDir(_state.Config.ResolvedDataDir);
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch { }
+    }
+
     private async Task RunConnectionAsync(CancellationToken ct)
     {
         var cfg = _state.Config;
@@ -107,6 +147,7 @@ public sealed class FleetClientService : BackgroundService
         }
         await ws.ConnectAsync(new Uri(fleet.ServerUrl!), ct);
         _state.FleetConnected = true;
+        _stateFrameSeen = false;
         _state.Audit.Write("fleet", $"connected to {fleet.ServerUrl} as {device.Code}", "ok");
 
         await SendAsync(ws, new FleetHelloFrame
@@ -124,6 +165,7 @@ public sealed class FleetClientService : BackgroundService
             EnrollmentKey = cfg.Fleet.EnrollmentKey,
             Macs = WakeSender.LocalMacs(),
         }, ct);
+        RefreshConsoleLink();
 
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var heartbeat = Task.Run(async () =>
@@ -142,6 +184,33 @@ public sealed class FleetClientService : BackgroundService
         using var shipperCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var shipper = Task.Run(() => ShipActivityLoopAsync(ws, shipperCts.Token), shipperCts.Token);
 
+        // Self-heal watchdog (v1.2.7): on the first start after the v1.2.5
+        // upgrade this client connected and wrote its "connected" audit line,
+        // then never processed the state frame the server sends immediately
+        // after hello — enrollment, signers and mesh all stalled until a
+        // manual service restart, after which the identical code processed
+        // everything in seconds. No provable cause exists in this path (the
+        // state handler is deserialize + a small file write; every mesh step
+        // behind it is timeout-bounded), so the cure is bounded and generic:
+        // a connection that has produced no state frame within 60 s of
+        // connecting is dropped ONCE (this watchdog is armed per connection)
+        // and the outer loop reconnects under its existing exponential
+        // backoff — a persistently broken server therefore cannot cause a
+        // tight reconnect loop.
+        var healWatchdog = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(60), heartbeatCts.Token);
+                if (!_stateFrameSeen && ws.State == WebSocketState.Open)
+                {
+                    _state.Audit.Write("fleet", "connected for 60s without a state frame — dropping the connection to reconnect (self-heal)", "warn");
+                    ws.Abort();
+                }
+            }
+            catch { /* cancelled together with the connection — nothing to heal */ }
+        }, heartbeatCts.Token);
+
         try
         {
             while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
@@ -157,6 +226,7 @@ public sealed class FleetClientService : BackgroundService
             shipperCts.Cancel();
             try { await heartbeat; } catch { }
             try { await shipper; } catch { }
+            try { await healWatchdog; } catch { }
             foreach (var (id, session) in _streams)
                 if (_streams.TryRemove(id, out var s)) s.Close();
             _state.FleetConnected = false;
@@ -208,6 +278,7 @@ public sealed class FleetClientService : BackgroundService
             case "state":
             {
                 var stateFrame = JsonSerializer.Deserialize<FleetStateFrame>(json, EsoJson.Options)!;
+                _stateFrameSeen = true;
                 _enrollmentState = stateFrame.State;
                 // Clock-skew sample for the doctor check (v1.1): the server stamps
                 // its state frames; skew = server time − local time at receipt.
@@ -236,6 +307,11 @@ public sealed class FleetClientService : BackgroundService
                 _state.OperatorPublicKeySpki = _operatorKey;
                 _state.PanelPublicKeySpki = _panelKey;
                 _state.Audit.Write("fleet", $"enrollment state: {_enrollmentState}", "ok");
+                // The console link tracks enrollment: refreshed on every
+                // state change, removed when the fleet rejects this device
+                // (it is then no longer a fleet device worth discovering).
+                if (stateFrame.State == "Rejected") RemoveConsoleLink();
+                else RefreshConsoleLink();
                 break;
             }
             case "stream-open":
