@@ -2,39 +2,66 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="EsoAgent.App.Views.DesktopView">
     <DockPanel Margin="10">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+        <!-- Session bar, row 1: connection + session state + live stats. Every action is one click from here. -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
             <Button x:Name="ConnectButton" Content="Connect" Click="OnConnectClick" />
             <Button x:Name="DisconnectButton" Content="Disconnect" Click="OnDisconnectClick" IsEnabled="False" />
             <CheckBox x:Name="ControlCheck" Content="Control (mouse + keyboard)" VerticalAlignment="Center"
                       IsCheckedChanged="OnSessionSettingChanged" />
-            <TextBlock Text="Quality" VerticalAlignment="Center" />
-            <NumericUpDown x:Name="QualityBox" Minimum="10" Maximum="95" Value="60" Width="110"
-                           ValueChanged="OnSessionSettingChanged" />
-            <TextBlock Text="Monitor" VerticalAlignment="Center" />
-            <ComboBox x:Name="MonitorBox" Width="200" SelectionChanged="OnSessionSettingChanged" />
-            <Button x:Name="PasteButton" Content="Paste my clipboard" Click="OnPasteClick" IsEnabled="False" />
             <CheckBox x:Name="RecordCheck" Content="Record session" VerticalAlignment="Center"
                       IsCheckedChanged="OnSessionSettingChanged" />
-            <Button x:Name="PrivacyButton" Content="Privacy: off" Click="OnPrivacyClick" IsEnabled="False" />
             <TextBlock x:Name="RecText" Text="● REC" Foreground="Red" FontWeight="Bold"
                        VerticalAlignment="Center" IsVisible="False" />
+            <Button x:Name="PrivacyButton" Content="Privacy: off" Click="OnPrivacyClick" IsEnabled="False" />
+            <Grid>
+                <Button x:Name="ChatButton" Content="Chat" Click="OnChatToggleClick" IsEnabled="False" />
+                <Border x:Name="ChatBadge" Background="{DynamicResource EsoAccentBrush}" CornerRadius="999"
+                        Padding="5,0" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-4,0"
+                        IsVisible="False">
+                    <TextBlock x:Name="ChatBadgeText" FontSize="10" FontWeight="Bold"
+                               Foreground="{DynamicResource EsoOnAccentBrush}" />
+                </Border>
+            </Grid>
+            <Button x:Name="FullscreenButton" Content="Fullscreen" Click="OnFullscreenClick" />
+            <TextBlock x:Name="StatsText" VerticalAlignment="Center" Opacity="0.75" />
+        </StackPanel>
+        <!-- Session bar, row 2: view + quality + monitor + one-click actions. -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <TextBlock x:Name="ViewLabel" Text="View" VerticalAlignment="Center" />
+            <ComboBox x:Name="ScalingBox" Width="130" SelectionChanged="OnScalingChanged" />
+            <TextBlock x:Name="QualityLabel" Text="Quality" VerticalAlignment="Center" />
+            <ComboBox x:Name="PresetBox" Width="130" SelectionChanged="OnPresetChanged" />
+            <TextBlock x:Name="MonitorLabel" Text="Monitor" VerticalAlignment="Center" />
+            <ComboBox x:Name="MonitorBox" Width="200" SelectionChanged="OnSessionSettingChanged" />
+            <Button x:Name="CadButton" Content="Send Ctrl+Alt+Del" Click="OnCadClick" IsEnabled="False" />
+            <Button x:Name="PasteButton" Content="Paste my clipboard" Click="OnPasteClick" IsEnabled="False" />
         </StackPanel>
         <TextBlock x:Name="StateText" DockPanel.Dock="Top" Opacity="0.75" Margin="0,0,0,8" TextWrapping="Wrap" />
-        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-            <TextBlock Text="Chat" DockPanel.Dock="Top" Opacity="0.75" Margin="0,0,0,4" />
-            <DockPanel DockPanel.Dock="Bottom" Margin="0,4,0,0">
-                <Button x:Name="ChatSendButton" Content="Send" DockPanel.Dock="Right" Margin="6,0,0,0"
-                        Click="OnChatSendClick" IsEnabled="False" />
-                <TextBox x:Name="ChatInput" Watermark="Message the person at the device…" IsEnabled="False"
-                         KeyDown="OnChatInputKeyDown" />
-            </DockPanel>
-            <TextBox x:Name="ChatLog" Height="64" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" />
-        </DockPanel>
-        <Border x:Name="ScreenBorder" Background="Black" Focusable="True"
-                PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
-                PointerReleased="OnPointerReleased" PointerWheelChanged="OnPointerWheel"
-                KeyDown="OnKeyDown" TextInput="OnTextInput">
-            <Image x:Name="ScreenImage" Stretch="Uniform" />
-        </Border>
+        <Grid>
+            <Border x:Name="ScreenBorder" Background="Black" Focusable="True"
+                    PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
+                    PointerReleased="OnPointerReleased" PointerWheelChanged="OnPointerWheel"
+                    KeyDown="OnKeyDown" TextInput="OnTextInput">
+                <Image x:Name="ScreenImage" Stretch="Uniform" />
+            </Border>
+            <!-- Chat slide-over: on demand, never a permanent dock. -->
+            <Border x:Name="ChatPanel" Width="320" HorizontalAlignment="Right" IsVisible="False"
+                    Background="{DynamicResource EsoSurfaceBrush}" BorderBrush="{DynamicResource EsoLineBrush}"
+                    BorderThickness="1,0,0,0" Padding="10">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Button x:Name="ChatCloseButton" Content="✕" DockPanel.Dock="Right" Click="OnChatToggleClick" />
+                        <TextBlock x:Name="ChatLabel" Text="Chat" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+                        <Button x:Name="ChatSendButton" Content="Send" DockPanel.Dock="Right" Margin="6,0,0,0"
+                                Click="OnChatSendClick" />
+                        <TextBox x:Name="ChatInput" Watermark="Message the person at the device…"
+                                 KeyDown="OnChatInputKeyDown" />
+                    </DockPanel>
+                    <TextBox x:Name="ChatLog" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" />
+                </DockPanel>
+            </Border>
+        </Grid>
     </DockPanel>
 </UserControl>

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -24,9 +25,25 @@ namespace EsoAgent.App.Views;
 /// bitmaps and rawdiff frames by decoding tiles with Core's RawDiffCodec.
 /// v1.2 adds: session recording (agent-side .esorec), privacy mode (blank
 /// remote screen + input lock), and in-session chat.
+///
+/// Phase 3 session chrome: a two-row session bar where every action is one
+/// click — fullscreen (F11), scaling modes (fit / actual size / stretch,
+/// applied locally), named quality presets (Core DesktopPresets; hello-time
+/// like every stream parameter, so changing one reconnects), a Send
+/// Ctrl+Alt+Del button, live stats measured from frame arrivals (fps,
+/// frame size, throughput — the protocol carries no timestamps, so no
+/// latency figure is invented), and chat as a slide-over with an unread
+/// badge instead of a permanently docked block.
 /// </summary>
 public sealed partial class DesktopView : UserControl
 {
+    private enum ScalingMode { Fit, Actual, Stretch }
+
+    private static readonly DesktopQualityPreset[] PresetOrder =
+        { DesktopQualityPreset.Auto, DesktopQualityPreset.Balanced, DesktopQualityPreset.Speed, DesktopQualityPreset.Quality };
+    private static readonly ScalingMode[] ScalingOrder =
+        { ScalingMode.Fit, ScalingMode.Actual, ScalingMode.Stretch };
+
     private ClientConfig? _cfg;
     private DeviceItem? _device;
     private string _targetHost = "";
@@ -39,17 +56,80 @@ public sealed partial class DesktopView : UserControl
     private List<MonitorInfo> _monitors = new();
     private int _monitorIndex;
 
+    private DesktopQualityPreset _preset = DesktopPresets.Default;
+    private ScalingMode _scaling = ScalingMode.Fit;
+    private readonly DesktopStatsTracker _stats = new();
+    private readonly DispatcherTimer _statsTimer;
+    private bool _fullscreen;
+    private bool _chatOpen;
+    private int _chatUnread;
+
     private Bitmap? _jpegBitmap;
     private WriteableBitmap? _rawBitmap;
     private RawFrame? _prevRaw;
     private long _lastMoveSent;
 
-    public DesktopView() => InitializeComponent();
+    /// <summary>Raised when fullscreen is toggled; the main window owns the
+    /// window state and the surrounding chrome (header, device list).</summary>
+    public event Action<bool>? FullscreenChanged;
+
+    public DesktopView()
+    {
+        InitializeComponent();
+        _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _statsTimer.Tick += OnStatsTick;
+        _statsTimer.Start();
+        ApplyLanguage();
+    }
+
+    public void ApplyLanguage()
+    {
+        ConnectButton.Content = Strings.T("Connect");
+        DisconnectButton.Content = Strings.T("Disconnect");
+        ControlCheck.Content = Strings.T("Control");
+        RecordCheck.Content = Strings.T("RecordSession");
+        PasteButton.Content = Strings.T("PasteClipboard");
+        ChatButton.Content = Strings.T("Chat");
+        ChatLabel.Text = Strings.T("Chat");
+        ChatSendButton.Content = Strings.T("Send");
+        ToolTip.SetTip(ChatCloseButton, Strings.T("CloseChat"));
+        FullscreenButton.Content = Strings.T(_fullscreen ? "ExitFullscreen" : "Fullscreen");
+        ViewLabel.Text = Strings.T("View");
+        QualityLabel.Text = Strings.T("Quality");
+        MonitorLabel.Text = Strings.T("Monitor");
+        CadButton.Content = Strings.T("SendCad");
+        PopulateCombos();
+    }
+
+    private void PopulateCombos()
+    {
+        _applyingSettings = true;
+        var presetIndex = Math.Max(0, Array.IndexOf(PresetOrder, _preset));
+        PresetBox.ItemsSource = PresetOrder.Select(p => p switch
+        {
+            DesktopQualityPreset.Auto => Strings.T("PresetAuto"),
+            DesktopQualityPreset.Balanced => Strings.T("PresetBalanced"),
+            DesktopQualityPreset.Speed => Strings.T("PresetSpeed"),
+            _ => Strings.T("Quality"),
+        }).ToList();
+        PresetBox.SelectedIndex = presetIndex;
+        var scalingIndex = Math.Max(0, Array.IndexOf(ScalingOrder, _scaling));
+        ScalingBox.ItemsSource = ScalingOrder.Select(s => s switch
+        {
+            ScalingMode.Fit => Strings.T("Fit"),
+            ScalingMode.Actual => Strings.T("ActualSize"),
+            _ => Strings.T("Stretch"),
+        }).ToList();
+        ScalingBox.SelectedIndex = scalingIndex;
+        _applyingSettings = false;
+    }
 
     public void Attach(ClientConfig cfg, DeviceItem device)
     {
         _cfg = cfg;
         _device = device;
+        if (_fullscreen) SetFullscreen(false);
+        SetChatOpen(false);
         _ = DisconnectCoreAsync();
         _targetHost = device.IsFleet
             ? device.Ips.FirstOrDefault() ?? device.VirtualIp ?? cfg.Host
@@ -61,7 +141,11 @@ public sealed partial class DesktopView : UserControl
     }
 
     /// <summary>Called by the main window when the selection changes or the window closes.</summary>
-    public void Detach() => _ = DisconnectCoreAsync();
+    public void Detach()
+    {
+        if (_fullscreen) SetFullscreen(false);
+        _ = DisconnectCoreAsync();
+    }
 
     /// <summary>Programmatic session start for the shell's one-click Connect
     /// (device rows, connect-by-code, recents, double-click). The exact same
@@ -74,7 +158,17 @@ public sealed partial class DesktopView : UserControl
 
     private async void OnDisconnectClick(object? sender, RoutedEventArgs e) => await DisconnectCoreAsync();
 
-    private async void OnSessionSettingChanged(object? sender, RoutedEventArgs e)
+    private async void OnSessionSettingChanged(object? sender, RoutedEventArgs e) => await ReconnectForSettingsAsync();
+
+    private async void OnPresetChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_applyingSettings) return;
+        if (PresetBox.SelectedIndex >= 0 && PresetBox.SelectedIndex < PresetOrder.Length)
+            _preset = PresetOrder[PresetBox.SelectedIndex];
+        await ReconnectForSettingsAsync();
+    }
+
+    private async Task ReconnectForSettingsAsync()
     {
         // Mode / quality / monitor are hello-time settings: changing one with a
         // live session reconnects with the new values (the honest behaviour —
@@ -82,6 +176,21 @@ public sealed partial class DesktopView : UserControl
         if (_applyingSettings || _client == null) return;
         _monitorIndex = Math.Max(0, MonitorBox.SelectedIndex);
         await ConnectAsync();
+    }
+
+    private void OnScalingChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_applyingSettings) return;
+        if (ScalingBox.SelectedIndex >= 0 && ScalingBox.SelectedIndex < ScalingOrder.Length)
+            _scaling = ScalingOrder[ScalingBox.SelectedIndex];
+        // Scaling is purely local — no reconnect, the same frames are
+        // simply presented differently.
+        ScreenImage.Stretch = _scaling switch
+        {
+            ScalingMode.Actual => Stretch.None,
+            ScalingMode.Stretch => Stretch.Fill,
+            _ => Stretch.Uniform,
+        };
     }
 
     private async Task ConnectAsync()
@@ -133,15 +242,19 @@ public sealed partial class DesktopView : UserControl
         _connecting = false;
     }
 
-    private DesktopHello BuildHello() => new()
+    private DesktopHello BuildHello()
     {
-        Mode = ControlCheck.IsChecked == true ? "Control" : "View",
-        Codecs = new List<string> { "jpeg", "rawdiff" },
-        Quality = (int)(QualityBox.Value ?? 60),
-        Monitor = _monitorIndex,
-        MaxFps = 12,
-        Record = RecordCheck.IsChecked == true,
-    };
+        var (quality, maxFps) = DesktopPresets.For(_preset);
+        return new DesktopHello
+        {
+            Mode = ControlCheck.IsChecked == true ? "Control" : "View",
+            Codecs = new List<string> { "jpeg", "rawdiff" },
+            Quality = quality,
+            Monitor = _monitorIndex,
+            MaxFps = maxFps,
+            Record = RecordCheck.IsChecked == true,
+        };
+    }
 
     private async Task OpenDirectAsync(string host, int port, string note)
     {
@@ -179,7 +292,15 @@ public sealed partial class DesktopView : UserControl
             if (clipboard != null) await clipboard.SetTextAsync(text);
         });
         handle.ChatReceived += text => Dispatcher.UIThread.Post(() =>
-            ChatLog.Text = (ChatLog.Text ?? "") + $"device: {text}\n");
+        {
+            ChatLog.Text = (ChatLog.Text ?? "") + $"device: {text}\n";
+            if (!_chatOpen)
+            {
+                _chatUnread++;
+                ChatBadgeText.Text = _chatUnread.ToString();
+                ChatBadge.IsVisible = true;
+            }
+        });
         handle.PrivacyReceived += on => Dispatcher.UIThread.Post(() =>
         {
             _privacyOn = on;
@@ -204,6 +325,7 @@ public sealed partial class DesktopView : UserControl
         _applyingSettings = false;
 
         _prevRaw = null;
+        _stats.Reset();
         _privacyOn = false;
         PrivacyButton.Content = "Privacy: off";
         RecText.IsVisible = !string.IsNullOrEmpty(welcome.Recording);
@@ -212,7 +334,9 @@ public sealed partial class DesktopView : UserControl
             + note;
         DisconnectButton.IsEnabled = true;
         PasteButton.IsEnabled = true;
+        CadButton.IsEnabled = true;
         PrivacyButton.IsEnabled = true;
+        ChatButton.IsEnabled = true;
         ChatInput.IsEnabled = true;
         ChatSendButton.IsEnabled = true;
         ScreenBorder.Focus();
@@ -228,12 +352,63 @@ public sealed partial class DesktopView : UserControl
             ConnectButton.IsEnabled = _cfg != null;
             DisconnectButton.IsEnabled = false;
             PasteButton.IsEnabled = false;
+            CadButton.IsEnabled = false;
             PrivacyButton.IsEnabled = false;
             PrivacyButton.Content = "Privacy: off";
             _privacyOn = false;
             RecText.IsVisible = false;
+            ChatButton.IsEnabled = false;
             ChatInput.IsEnabled = false;
             ChatSendButton.IsEnabled = false;
+            SetChatOpen(false);
+            _chatUnread = 0;
+            ChatBadge.IsVisible = false;
+            StatsText.Text = "";
+        }
+    }
+
+    // ---------- session chrome: fullscreen, stats, CAD, chat ----------
+
+    private void OnFullscreenClick(object? sender, RoutedEventArgs e) => SetFullscreen(!_fullscreen);
+
+    private void ToggleFullscreen() => SetFullscreen(!_fullscreen);
+
+    private void SetFullscreen(bool on)
+    {
+        if (_fullscreen == on) return;
+        _fullscreen = on;
+        FullscreenButton.Content = Strings.T(on ? "ExitFullscreen" : "Fullscreen");
+        FullscreenChanged?.Invoke(on);
+    }
+
+    private void OnStatsTick(object? sender, EventArgs e)
+    {
+        if (_client is not { IsConnected: true })
+        {
+            if (!string.IsNullOrEmpty(StatsText.Text)) StatsText.Text = "";
+            return;
+        }
+        var (fps, bps, avg) = _stats.Snapshot(Environment.TickCount64);
+        StatsText.Text = $"{fps:F0} fps · {_stats.Width}×{_stats.Height} · {avg / 1024:F0} KB/f · {bps / 1024:F0} KB/s";
+    }
+
+    private void OnCadClick(object? sender, RoutedEventArgs e)
+    {
+        if (_client == null) return;
+        _ = _client.SendInputAsync(new DesktopInput { Kind = "key", Key = "ctrl+alt+delete" });
+    }
+
+    private void OnChatToggleClick(object? sender, RoutedEventArgs e) => SetChatOpen(!_chatOpen);
+
+    private void SetChatOpen(bool open)
+    {
+        _chatOpen = open;
+        ChatPanel.IsVisible = open;
+        if (open)
+        {
+            _chatUnread = 0;
+            ChatBadge.IsVisible = false;
+            ChatInput.Focus();
         }
     }
 
@@ -324,6 +499,7 @@ public sealed partial class DesktopView : UserControl
     private void OnFrameReceived(DesktopFrame frame)
     {
         var data = Convert.FromBase64String(frame.Data);
+        _stats.AddFrame(data.Length, frame.Width, frame.Height, frame.Codec, Environment.TickCount64);
         Dispatcher.UIThread.Post(() =>
         {
             try
@@ -368,7 +544,9 @@ public sealed partial class DesktopView : UserControl
 
     private bool CanControl => _client is { IsConnected: true } && ControlCheck.IsChecked == true;
 
-    /// <summary>Pointer position normalized 0..1 over the actually-rendered image rect (letterbox-aware).</summary>
+    /// <summary>Pointer position normalized 0..1 over the actually-rendered
+    /// image rect — letterbox-aware in Fit, centered-native in Actual size,
+    /// direct in Stretch.</summary>
     private (double X, double Y)? Normalize(PointerEventArgs e)
     {
         var size = (ScreenImage.Source as Bitmap)?.PixelSize
@@ -376,12 +554,26 @@ public sealed partial class DesktopView : UserControl
         if (size.Width == 0 || size.Height == 0) return null;
         var bounds = ScreenImage.Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0) return null;
-        var scale = Math.Min(bounds.Width / size.Width, bounds.Height / size.Height);
-        var w = size.Width * scale;
-        var h = size.Height * scale;
         var pos = e.GetPosition(ScreenImage);
-        var x = (pos.X - (bounds.Width - w) / 2) / w;
-        var y = (pos.Y - (bounds.Height - h) / 2) / h;
+        double x, y;
+        switch (_scaling)
+        {
+            case ScalingMode.Stretch:
+                x = pos.X / bounds.Width;
+                y = pos.Y / bounds.Height;
+                break;
+            case ScalingMode.Actual:
+                x = (pos.X - (bounds.Width - size.Width) / 2) / size.Width;
+                y = (pos.Y - (bounds.Height - size.Height) / 2) / size.Height;
+                break;
+            default:
+                var scale = Math.Min(bounds.Width / size.Width, bounds.Height / size.Height);
+                var w = size.Width * scale;
+                var h = size.Height * scale;
+                x = (pos.X - (bounds.Width - w) / 2) / w;
+                y = (pos.Y - (bounds.Height - h) / 2) / h;
+                break;
+        }
         return x is >= 0 and <= 1 && y is >= 0 and <= 1 ? (x, y) : null;
     }
 
@@ -442,6 +634,13 @@ public sealed partial class DesktopView : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Local chrome keys first: F11 is the fullscreen toggle (the plan's
+        // session-bar convention), Esc closes the chat slide-over, and in
+        // View mode Esc also leaves fullscreen. In Control mode Esc belongs
+        // to the remote machine and is forwarded like any other key.
+        if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
+        if (e.Key == Key.Escape && _chatOpen) { SetChatOpen(false); e.Handled = true; return; }
+        if (e.Key == Key.Escape && _fullscreen && !CanControl) { SetFullscreen(false); e.Handled = true; return; }
         if (!CanControl) return;
         var mods = e.KeyModifiers;
         var ctrl = mods.HasFlag(KeyModifiers.Control);
@@ -511,7 +710,8 @@ public sealed partial class DesktopView : UserControl
         Key.Insert => "Insert",
         Key.F1 => "F1", Key.F2 => "F2", Key.F3 => "F3", Key.F4 => "F4",
         Key.F5 => "F5", Key.F6 => "F6", Key.F7 => "F7", Key.F8 => "F8",
-        Key.F9 => "F9", Key.F10 => "F10", Key.F11 => "F11", Key.F12 => "F12",
+        Key.F9 => "F9", Key.F10 => "F10", Key.F12 => "F12",
+        // F11 is the local fullscreen toggle (handled in OnKeyDown before this).
         _ => null,
     };
 

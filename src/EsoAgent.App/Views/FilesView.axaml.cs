@@ -1,36 +1,142 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using EsoAgent.App.Services;
 using EsoAgent.Client;
 using EsoAgent.Core;
 
 namespace EsoAgent.App.Views;
 
-/// <summary>One row in the file manager.</summary>
+/// <summary>Human file sizes for the file panes and the transfer queue.</summary>
+internal static class FileSizeText
+{
+    public static string Of(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        < 1024 * 1024 * 1024 => $"{bytes / 1048576.0:F1} MB",
+        _ => $"{bytes / 1073741824.0:F2} GB",
+    };
+}
+
+/// <summary>One row in the remote (device) pane.</summary>
 public sealed class FileEntryItem
 {
     public required FileEntryDto Entry { get; init; }
     public string Display => Entry.IsDir
         ? $"{Entry.Name}/"
-        : $"{Entry.Name}    ({Entry.Size / 1024.0:F1} KB)";
+        : $"{Entry.Name}    ({FileSizeText.Of(Entry.Size ?? 0)})";
+}
+
+/// <summary>One row in the local (this computer) pane.</summary>
+public sealed class LocalEntryItem
+{
+    public required string Name { get; init; }
+    public required string FullPath { get; init; }
+    public required bool IsDir { get; init; }
+    public long Size { get; init; }
+    public string Display => IsDir ? $"{Name}/" : $"{Name}    ({FileSizeText.Of(Size)})";
+}
+
+/// <summary>View model for one row of the transfer queue dock: mirrors a
+/// Core TransferJob, adding a smoothed speed from successive samples.</summary>
+public sealed class TransferItemView : INotifyPropertyChanged
+{
+    private long _lastBytes;
+    private long _lastTick;
+    private double _speed;
+
+    public TransferItemView(TransferJob job)
+    {
+        Job = job;
+        _lastBytes = job.BytesDone;
+        _lastTick = Environment.TickCount64;
+        Detail = "";
+        Refresh();
+    }
+
+    public TransferJob Job { get; }
+    public string Title => (Job.Direction == TransferDirection.Upload ? "↑ " : "↓ ") + Job.Name;
+    public double Percent => Job.Fraction * 100;
+    public bool CanCancel => Job.State is TransferState.Queued or TransferState.Running;
+    public string Detail { get; private set; }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void Refresh()
+    {
+        var now = Environment.TickCount64;
+        var dt = (now - _lastTick) / 1000.0;
+        if (dt >= 0.5)
+        {
+            _speed = (Job.BytesDone - _lastBytes) / dt;
+            _lastBytes = Job.BytesDone;
+            _lastTick = now;
+        }
+        var state = Job.State switch
+        {
+            TransferState.Queued => Strings.T("TransferQueued"),
+            TransferState.Running => Strings.T("TransferRunning"),
+            TransferState.Completed => Strings.T("TransferCompleted"),
+            TransferState.Cancelled => Strings.T("TransferCancelled"),
+            _ => Strings.T("TransferFailed") + (string.IsNullOrEmpty(Job.Error) ? "" : $": {Job.Error}"),
+        };
+        Detail = Job.TotalBytes > 0
+            ? $"{FileSizeText.Of(Job.BytesDone)} {Strings.T("OfBytes")} {FileSizeText.Of(Job.TotalBytes)}"
+              + (Job.State == TransferState.Running && _speed > 1 ? $" · {FileSizeText.Of((long)_speed)}/s" : "")
+              + $" · {state}"
+            : state;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Percent)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Detail)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCancel)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
+    }
 }
 
 /// <summary>
-/// Files tab (v1.2) — a real file manager over the EXISTING transfer layer:
-/// directory listing + chunked resumable upload (SHA-256 commit) + ranged
-/// download + delete/rename/mkdir, all through the shared Transport, so it
-/// works identically direct and via the fleet relay. A human never needs
-/// the CLI for files.
+/// Files tab (Phase 3) — a dual-pane file manager over the EXISTING
+/// transfer protocol: this computer on the left, the device on the right,
+/// drag &amp; drop both ways (and from the OS onto the device pane), and a
+/// transfer queue dock with per-file progress, speed and cancel, driven
+/// by Core's TransferQueue/TransferEngine (chunked, resumable, SHA-256
+/// verified — a cancelled upload's partial stays on the device and the
+/// next attempt resumes it). Remote housekeeping (delete / rename / new
+/// folder) is unchanged. F4 is now: select in one pane → one click (or
+/// drag) — no OS dialogs.
 /// </summary>
 public sealed partial class FilesView : UserControl
 {
+    private const string LocalFormat = "EsoAgent.LocalFiles";
+    private const string RemoteFormat = "EsoAgent.RemoteFiles";
+
     private ClientConfig? _cfg;
     private DeviceItem? _device;
     private string _path = "";
     private string? _parent;
+    private string _localPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-    public FilesView() => InitializeComponent();
+    private readonly TransferQueue _queue = new();
+    private readonly ObservableCollection<TransferItemView> _queueViews = new();
+
+    private Point _localPress;
+    private Point _remotePress;
+    private bool _dragging;
+
+    public FilesView()
+    {
+        InitializeComponent();
+        QueueList.ItemsSource = _queueViews;
+        _queue.JobChanged += OnJobChanged;
+        WireDrag(LocalList, isLocal: true);
+        WireDrag(EntriesList, isLocal: false);
+        LoadLocal(_localPath);
+        ApplyLanguage();
+    }
 
     public void Attach(ClientConfig cfg, DeviceItem device)
     {
@@ -38,6 +144,7 @@ public sealed partial class FilesView : UserControl
         _device = device;
         _path = "";
         StateText.Text = "";
+        RemoteLabel.Text = device.Title;
         ApplyLanguage();
         _ = LoadAsync("");
     }
@@ -51,10 +158,28 @@ public sealed partial class FilesView : UserControl
         RenameButton.Content = Strings.T("Rename");
         MkdirButton.Content = Strings.T("NewFolder");
         UpButton.Content = Strings.T("Up");
+        LocalUpButton.Content = Strings.T("Up");
+        LocalLabel.Text = Strings.T("ThisComputer");
+        TransfersLabel.Text = Strings.T("Transfers");
+        ClearFinishedButton.Content = Strings.T("ClearFinished");
+        foreach (var vm in _queueViews) vm.Refresh();
     }
 
     private Transport NewTransport() =>
         Transport.Create(_cfg!, _device!.IsFleet ? _device.Code : null, null, false);
+
+    /// <summary>A channel factory bound to the CURRENTLY attached device —
+    /// captured per enqueue, so a queued job keeps talking to the device it
+    /// was started for even if the view is re-attached meanwhile.</summary>
+    private Func<ITransferChannel> ChannelFactory()
+    {
+        var cfg = _cfg!;
+        var device = _device!;
+        return () => new TransportChannelAdapter(
+            Transport.Create(cfg, device.IsFleet ? device.Code : null, null, false));
+    }
+
+    // ---------- remote pane ----------
 
     private async Task LoadAsync(string path)
     {
@@ -90,87 +215,12 @@ public sealed partial class FilesView : UserControl
 
     private void OnEntryDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (EntriesList.SelectedItem is FileEntryItem { Entry.IsDir: true } item)
-            _ = LoadAsync(item.Entry.Path);
+        if (EntriesList.SelectedItem is not FileEntryItem item) return;
+        if (item.Entry.IsDir) _ = LoadAsync(item.Entry.Path);
+        else EnqueueDownload(item.Entry);
     }
 
     private FileEntryItem? Selected => EntriesList.SelectedItem as FileEntryItem;
-
-    private async void OnUploadClick(object? sender, RoutedEventArgs e)
-    {
-        var top = TopLevel.GetTopLevel(this);
-        if (top == null || _cfg == null) return;
-        var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Upload to device", AllowMultiple = false });
-        var picked = files.FirstOrDefault();
-        if (picked == null) return;
-        var localPath = picked.TryGetLocalPath();
-        if (localPath == null) { StateText.Text = "That file has no local path."; return; }
-        var remote = JoinRemote(_path, Path.GetFileName(localPath));
-        StateText.Text = $"Uploading {Path.GetFileName(localPath)}…";
-        try
-        {
-            using var transport = NewTransport();
-            var size = new FileInfo(localPath).Length;
-            var sha = FileTransferService.HashFile(localPath);
-            var begin = await transport.SendAsync("POST", "/api/files/begin", new BeginUploadRequest { Path = remote });
-            if (begin.Count == 0 || !begin[0].Ok) throw new InvalidOperationException(begin.Count == 0 ? "no reply" : begin[0].Error ?? begin[0].Text);
-            var offset = begin[0].Json<BeginUploadResponse>().Received;
-            if (offset > size) offset = 0;
-            var chunkSize = transport.IsFleet ? 256 * 1024 : 4 * 1024 * 1024;
-            await using var fs = File.OpenRead(localPath);
-            fs.Seek(offset, SeekOrigin.Begin);
-            var buffer = new byte[chunkSize];
-            var current = offset;
-            int read;
-            while ((read = await fs.ReadAsync(buffer)) > 0)
-            {
-                var chunk = read == buffer.Length ? buffer : buffer[..read];
-                var rs = await transport.SendRawAsync("PUT", $"/api/files/chunk?path={Uri.EscapeDataString(remote)}&offset={current}", chunk, 300);
-                if (rs.Count == 0 || !rs[0].Ok) throw new InvalidOperationException(rs.Count == 0 ? "no reply" : rs[0].Error ?? rs[0].Text);
-                current = rs[0].Json<ChunkResponse>().Received;
-            }
-            var commit = await transport.SendAsync("POST", "/api/files/commit", new CommitUploadRequest { Path = remote, Sha256 = sha });
-            if (commit.Count == 0 || !commit[0].Ok) throw new InvalidOperationException(commit.Count == 0 ? "no reply" : commit[0].Error ?? commit[0].Text);
-            StateText.Text = $"Uploaded {size} bytes, SHA-256 verified.";
-            await LoadAsync(_path);
-        }
-        catch (Exception ex) { StateText.Text = $"Upload failed: {ex.Message}"; }
-    }
-
-    private async void OnDownloadClick(object? sender, RoutedEventArgs e)
-    {
-        var top = TopLevel.GetTopLevel(this);
-        if (top == null || _cfg == null || Selected is not { Entry.IsDir: false } item) { StateText.Text = "Select a file first."; return; }
-        var save = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Download from device",
-            SuggestedFileName = item.Entry.Name,
-        });
-        var localPath = save?.TryGetLocalPath();
-        if (localPath == null) return;
-        StateText.Text = $"Downloading {item.Entry.Name}…";
-        try
-        {
-            using var transport = NewTransport();
-            var infoReplies = await transport.SendAsync("GET", $"/api/files/info?path={Uri.EscapeDataString(item.Entry.Path)}");
-            var info = infoReplies[0].Json<FileInfoResponse>();
-            await using var outFs = new FileStream(localPath, FileMode.Create, FileAccess.Write);
-            long offset = 0;
-            const int chunk = 1024 * 1024;
-            while (offset < info.Size)
-            {
-                var length = Math.Min(chunk, info.Size - offset);
-                var rs = await transport.SendRawAsync("GET", $"/api/files/download?path={Uri.EscapeDataString(item.Entry.Path)}&offset={offset}&length={length}", Array.Empty<byte>(), 300);
-                if (rs.Count == 0 || !rs[0].Ok) throw new InvalidOperationException(rs.Count == 0 ? "no reply" : rs[0].Error ?? rs[0].Text);
-                await outFs.WriteAsync(rs[0].Body);
-                offset += rs[0].Body.Length;
-            }
-            await outFs.FlushAsync();
-            var verified = info.Sha256 == null || string.Equals(info.Sha256, FileTransferService.HashFile(localPath), StringComparison.OrdinalIgnoreCase);
-            StateText.Text = $"Downloaded {info.Size} bytes · SHA-256 verified: {verified}";
-        }
-        catch (Exception ex) { StateText.Text = $"Download failed: {ex.Message}"; }
-    }
 
     private async void OnDeleteClick(object? sender, RoutedEventArgs e)
     {
@@ -250,5 +300,198 @@ public sealed partial class FilesView : UserControl
         ok.Click += (_, _) => dialog.Close(box.Text);
         ((StackPanel)dialog.Content).Children.Add(ok);
         return await dialog.ShowDialog<string?>(owner);
+    }
+
+    // ---------- local pane ----------
+
+    private void LoadLocal(string path)
+    {
+        try
+        {
+            var info = new DirectoryInfo(path);
+            if (!info.Exists) { StateText.Text = $"No such folder: {path}"; return; }
+            _localPath = info.FullName;
+            LocalPathBox.Text = _localPath;
+            var items = new List<LocalEntryItem>();
+            foreach (var d in info.EnumerateDirectories().OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase))
+                items.Add(new LocalEntryItem { Name = d.Name, FullPath = d.FullName, IsDir = true });
+            foreach (var f in info.EnumerateFiles().OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase))
+                items.Add(new LocalEntryItem { Name = f.Name, FullPath = f.FullName, IsDir = false, Size = f.Length });
+            LocalList.ItemsSource = items;
+        }
+        catch (Exception ex) { StateText.Text = $"Local list failed: {ex.Message}"; }
+    }
+
+    private void OnLocalUpClick(object? sender, RoutedEventArgs e)
+    {
+        var parent = Directory.GetParent(_localPath);
+        if (parent != null) LoadLocal(parent.FullName);
+    }
+
+    private void OnLocalPathKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) { LoadLocal(LocalPathBox.Text ?? ""); e.Handled = true; }
+    }
+
+    private void OnLocalDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (LocalList.SelectedItem is not LocalEntryItem item) return;
+        if (item.IsDir) LoadLocal(item.FullPath);
+        else EnqueueUpload(item.FullPath);
+    }
+
+    // ---------- transfers ----------
+
+    private void EnqueueUpload(string localPath)
+    {
+        if (_cfg == null || _device == null) { StateText.Text = "Select a device first."; return; }
+        var name = Path.GetFileName(localPath);
+        _queue.Enqueue(TransferDirection.Upload, name, localPath, JoinRemote(_path, name), ChannelFactory());
+    }
+
+    private void EnqueueDownload(FileEntryDto entry) => EnqueueDownload(entry.Path, entry.Name);
+
+    private void EnqueueDownload(string remotePath, string? name = null)
+    {
+        if (_cfg == null || _device == null) { StateText.Text = "Select a device first."; return; }
+        name ??= remotePath.Split('/', '\\')[^1];
+        _queue.Enqueue(TransferDirection.Download, name, Path.Combine(_localPath, name), remotePath, ChannelFactory());
+    }
+
+    private void OnUploadClick(object? sender, RoutedEventArgs e)
+    {
+        var files = (LocalList.SelectedItems ?? Array.Empty<object>()).OfType<LocalEntryItem>()
+            .Where(i => !i.IsDir).ToList();
+        if (files.Count == 0) { StateText.Text = "Select local file(s) first."; return; }
+        foreach (var f in files) EnqueueUpload(f.FullPath);
+    }
+
+    private void OnDownloadClick(object? sender, RoutedEventArgs e)
+    {
+        var files = (EntriesList.SelectedItems ?? Array.Empty<object>()).OfType<FileEntryItem>()
+            .Where(i => !i.Entry.IsDir).ToList();
+        if (files.Count == 0) { StateText.Text = "Select device file(s) first."; return; }
+        foreach (var f in files) EnqueueDownload(f.Entry);
+    }
+
+    private void OnJobChanged(TransferJob job)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var vm = _queueViews.FirstOrDefault(v => v.Job.Id == job.Id);
+            if (vm == null)
+            {
+                vm = new TransferItemView(job);
+                _queueViews.Add(vm);
+            }
+            vm.Refresh();
+            if (job.State == TransferState.Completed)
+            {
+                // Show the result where it landed.
+                if (job.Direction == TransferDirection.Upload) _ = LoadAsync(_path);
+                else LoadLocal(_localPath);
+            }
+        });
+    }
+
+    private void OnQueueCancelClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: TransferItemView vm }) vm.Job.Cancel();
+    }
+
+    private void OnClearFinishedClick(object? sender, RoutedEventArgs e)
+    {
+        _queue.ClearFinished();
+        var live = _queue.Jobs.Select(j => j.Id).ToHashSet();
+        for (var i = _queueViews.Count - 1; i >= 0; i--)
+            if (!live.Contains(_queueViews[i].Job.Id)) _queueViews.RemoveAt(i);
+    }
+
+    // ---------- drag & drop ----------
+
+    private static readonly DataFormat<string> LocalFilesFormat =
+        DataFormat.CreateStringApplicationFormat(LocalFormat);
+    private static readonly DataFormat<string> RemoteFilesFormat =
+        DataFormat.CreateStringApplicationFormat(RemoteFormat);
+
+    private void WireDrag(ListBox list, bool isLocal)
+    {
+        DragDrop.SetAllowDrop(list, true);
+        list.AddHandler(DragDrop.DragOverEvent, (object? _, DragEventArgs e) => OnPaneDragOver(e, isLocal));
+        list.AddHandler(DragDrop.DropEvent, (object? _, DragEventArgs e) => OnPaneDrop(e, isLocal));
+        list.PointerPressed += (_, e) =>
+        {
+            if (isLocal) _localPress = e.GetPosition(list);
+            else _remotePress = e.GetPosition(list);
+        };
+        list.PointerMoved += async (_, e) => await MaybeStartDragAsync(e, list, isLocal);
+    }
+
+    private async Task MaybeStartDragAsync(PointerEventArgs e, ListBox list, bool isLocal)
+    {
+        if (_dragging || !e.GetCurrentPoint(list).Properties.IsLeftButtonPressed) return;
+        var start = isLocal ? _localPress : _remotePress;
+        var pos = e.GetPosition(list);
+        if (Math.Abs(pos.X - start.X) < 6 && Math.Abs(pos.Y - start.Y) < 6) return;
+        var selected = (list.SelectedItems ?? Array.Empty<object>()).Cast<object>().ToList();
+        if (selected.Count == 0) return;
+        var transfer = new DataTransfer();
+        if (isLocal)
+        {
+            var paths = selected.OfType<LocalEntryItem>().Where(i => !i.IsDir).Select(i => i.FullPath).ToList();
+            if (paths.Count == 0) return;
+            transfer.Add(DataTransferItem.Create(LocalFilesFormat, string.Join("\n", paths)));
+        }
+        else
+        {
+            var paths = selected.OfType<FileEntryItem>().Where(i => !i.Entry.IsDir).Select(i => i.Entry.Path).ToList();
+            if (paths.Count == 0) return;
+            transfer.Add(DataTransferItem.Create(RemoteFilesFormat, string.Join("\n", paths)));
+        }
+        _dragging = true;
+        // The transfer is NOT disposed here — the drag source owns it and
+        // disposes it when the operation completes (IDataTransfer contract).
+        try { await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Copy); }
+        catch { /* a cancelled drag is not an error */ }
+        finally { _dragging = false; }
+    }
+
+    private void OnPaneDragOver(DragEventArgs e, bool isLocal)
+    {
+        var ok = isLocal
+            ? e.DataTransfer.Formats.Contains(RemoteFilesFormat)
+            : e.DataTransfer.Formats.Contains(LocalFilesFormat) || e.DataTransfer.Formats.Contains(DataFormat.File);
+        e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnPaneDrop(DragEventArgs e, bool isLocal)
+    {
+        if (isLocal)
+        {
+            if (e.DataTransfer.TryGetValue(RemoteFilesFormat) is { } s)
+                foreach (var remotePath in s.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    EnqueueDownload(remotePath);
+        }
+        else
+        {
+            if (e.DataTransfer.TryGetValue(LocalFilesFormat) is { } s)
+            {
+                foreach (var localPath in s.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    EnqueueUpload(localPath);
+            }
+            else
+            {
+                foreach (var item in e.DataTransfer.Items)
+                {
+                    if (item.TryGetValue(DataFormat.File) is { } file)
+                    {
+                        var p = file.TryGetLocalPath();
+                        if (p != null && File.Exists(p)) EnqueueUpload(p);
+                    }
+                }
+            }
+        }
+        e.Handled = true;
     }
 }

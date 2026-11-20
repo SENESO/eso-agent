@@ -3,9 +3,11 @@
              x:Class="EsoAgent.App.Views.TerminalView">
     <DockPanel Margin="10">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-            <TextBlock Text="Shell:" VerticalAlignment="Center" />
-            <ComboBox x:Name="ShellBox" Width="130" />
+            <TextBlock x:Name="ShellLabel" Text="Shell:" VerticalAlignment="Center" />
+            <ComboBox x:Name="ShellBox" Width="130" SelectionChanged="OnShellChanged" />
             <TextBlock x:Name="ModeText" VerticalAlignment="Center" Opacity="0.75" />
+            <Button x:Name="RestartButton" Content="Restart" Click="OnRestartClick" IsEnabled="False" />
+            <Button x:Name="EndButton" Content="End session" Click="OnEndClick" IsEnabled="False" />
             <Button x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" IsVisible="False" />
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">

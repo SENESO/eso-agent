@@ -25,7 +25,7 @@
         </Style>
     </Window.Styles>
     <DockPanel>
-        <Border DockPanel.Dock="Top" Padding="12,8" BorderThickness="0,0,0,1"
+        <Border x:Name="HeaderBar" DockPanel.Dock="Top" Padding="12,8" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource EsoLineBrush}" Background="{DynamicResource EsoSurfaceBrush}">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
@@ -45,7 +45,7 @@
             </DockPanel>
         </Border>
         <TextBlock x:Name="StatusBarText" DockPanel.Dock="Bottom" Margin="12,6" Classes="muted" />
-        <DockPanel DockPanel.Dock="Left" Width="372" Margin="8,8,0,8">
+        <DockPanel x:Name="HomePanel" DockPanel.Dock="Left" Width="372" Margin="8,8,0,8">
             <!-- Home: this device's identity, connect-by-code, recents, search — the connect flow lives here. -->
             <Border Classes="card" DockPanel.Dock="Top" Margin="0,0,0,8">
                 <StackPanel Spacing="4">

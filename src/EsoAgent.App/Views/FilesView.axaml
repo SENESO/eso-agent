@@ -3,25 +3,77 @@
              xmlns:app="using:EsoAgent.App.Views"
              x:Class="EsoAgent.App.Views.FilesView">
     <DockPanel Margin="10">
-        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-            <Button x:Name="UpButton" Content="↑ Up" DockPanel.Dock="Left" Click="OnUpClick" />
-            <Button x:Name="RefreshButton" Content="Refresh" DockPanel.Dock="Right" Margin="6,0,0,0" Click="OnRefreshClick" />
-            <TextBox x:Name="PathBox" Margin="6,0,0,0" KeyDown="OnPathKeyDown" />
-        </DockPanel>
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-            <Button x:Name="UploadButton" Content="Upload…" Click="OnUploadClick" />
-            <Button x:Name="DownloadButton" Content="Download…" Click="OnDownloadClick" />
-            <Button x:Name="DeleteButton" Content="Delete" Click="OnDeleteClick" />
-            <Button x:Name="RenameButton" Content="Rename…" Click="OnRenameClick" />
-            <Button x:Name="MkdirButton" Content="New folder…" Click="OnMkdirClick" />
-            <TextBlock x:Name="StateText" VerticalAlignment="Center" Opacity="0.75" />
-        </StackPanel>
-        <ListBox x:Name="EntriesList" DoubleTapped="OnEntryDoubleTapped">
-            <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="app:FileEntryItem">
-                    <TextBlock Text="{Binding Display}" Margin="4,2" />
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+        <!-- Transfer queue dock: every transfer with live progress + cancel. -->
+        <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="8"
+                Background="{DynamicResource EsoSurfaceBrush}" BorderBrush="{DynamicResource EsoLineBrush}"
+                BorderThickness="1" CornerRadius="8">
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                    <Button x:Name="ClearFinishedButton" Content="Clear finished" DockPanel.Dock="Right"
+                            Click="OnClearFinishedClick" Padding="8,2" />
+                    <TextBlock x:Name="TransfersLabel" Text="Transfers" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </DockPanel>
+                <ListBox x:Name="QueueList" Height="104" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="app:TransferItemView">
+                            <Grid ColumnDefinitions="230,*,280,Auto" Margin="2">
+                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <ProgressBar Grid.Column="1" Value="{Binding Percent}" Minimum="0" Maximum="100"
+                                             Height="10" Margin="10,0" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding Detail}" FontSize="12" Opacity="0.8"
+                                           VerticalAlignment="Center" />
+                                <Button Grid.Column="3" Content="✕" Padding="7,1"
+                                        IsVisible="{Binding CanCancel}" Click="OnQueueCancelClick" Tag="{Binding}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+        <TextBlock x:Name="StateText" DockPanel.Dock="Bottom" Margin="0,6,0,0" Opacity="0.75" TextWrapping="Wrap" />
+        <Grid ColumnDefinitions="*,Auto,*">
+            <!-- Local pane: this computer. -->
+            <DockPanel Grid.Column="0" Margin="0,0,6,0">
+                <TextBlock x:Name="LocalLabel" Text="This computer" FontWeight="SemiBold" DockPanel.Dock="Top" Margin="0,0,0,4" />
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <Button x:Name="LocalUpButton" Content="↑ Up" DockPanel.Dock="Left" Click="OnLocalUpClick" />
+                    <TextBox x:Name="LocalPathBox" Margin="6,0,0,0" KeyDown="OnLocalPathKeyDown" />
+                </DockPanel>
+                <ListBox x:Name="LocalList" SelectionMode="Multiple" DoubleTapped="OnLocalDoubleTapped">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="app:LocalEntryItem">
+                            <TextBlock Text="{Binding Display}" Margin="4,2" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+            <!-- Transfer actions on the current selections. -->
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8" Margin="2,0">
+                <Button x:Name="UploadButton" Content="Upload…" Click="OnUploadClick" HorizontalAlignment="Stretch" />
+                <Button x:Name="DownloadButton" Content="Download…" Click="OnDownloadClick" HorizontalAlignment="Stretch" />
+            </StackPanel>
+            <!-- Remote pane: the device. -->
+            <DockPanel Grid.Column="2" Margin="6,0,0,0">
+                <TextBlock x:Name="RemoteLabel" Text="Device" FontWeight="SemiBold" DockPanel.Dock="Top" Margin="0,0,0,4" />
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <Button x:Name="UpButton" Content="↑ Up" DockPanel.Dock="Left" Click="OnUpClick" />
+                    <Button x:Name="RefreshButton" Content="Refresh" DockPanel.Dock="Right" Margin="6,0,0,0" Click="OnRefreshClick" />
+                    <TextBox x:Name="PathBox" Margin="6,0,0,0" KeyDown="OnPathKeyDown" />
+                </DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+                    <Button x:Name="DeleteButton" Content="Delete" Click="OnDeleteClick" />
+                    <Button x:Name="RenameButton" Content="Rename…" Click="OnRenameClick" />
+                    <Button x:Name="MkdirButton" Content="New folder…" Click="OnMkdirClick" />
+                </StackPanel>
+                <ListBox x:Name="EntriesList" SelectionMode="Multiple" DoubleTapped="OnEntryDoubleTapped">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="app:FileEntryItem">
+                            <TextBlock Text="{Binding Display}" Margin="4,2" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Grid>
     </DockPanel>
 </UserControl>

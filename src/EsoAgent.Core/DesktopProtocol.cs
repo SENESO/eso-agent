@@ -134,6 +134,43 @@ public sealed class DesktopChat
     public string From { get; set; } = "operator";
 }
 
+/// <summary>
+/// Named desktop quality presets (UI overhaul Phase 3) — the session bar
+/// offers names, not a raw 10–95 spinner. Every value stays inside the
+/// ranges the agents already enforce: quality 10..95, fps clamped to
+/// 1..30 by every capture path (DesktopStreamRunner, the Windows tray
+/// handler, the Linux helper), and the stream adapts DOWN from the
+/// requested ceiling to the measured link (AdaptiveQuality), never below
+/// the legibility floor. Auto is the adaptive default: the highest
+/// ceiling the protocol carries, with adaptation doing the tuning — it
+/// replaces the app's old hard-coded 12 fps cap.
+/// </summary>
+public enum DesktopQualityPreset { Auto, Balanced, Speed, Quality }
+
+public static class DesktopPresets
+{
+    /// <summary>The highest MaxFps any agent capture path will honour.</summary>
+    public const int MaxFpsCeiling = 30;
+
+    public static DesktopQualityPreset Default => DesktopQualityPreset.Auto;
+
+    public static (int Quality, int MaxFps) For(DesktopQualityPreset preset) => preset switch
+    {
+        // Motion first: the legibility-floor quality, full frame-rate ceiling.
+        DesktopQualityPreset.Speed => (40, 30),
+        // A steadier middle: session quality, a capped rate for quiet links.
+        DesktopQualityPreset.Balanced => (60, 20),
+        // Sharpness first: near-lossless stills, motion traded away.
+        DesktopQualityPreset.Quality => (88, 15),
+        // Adaptive default: standard quality, full ceiling, agent-side
+        // adaptation tunes the real rate/quality to the measured link.
+        _ => (60, 30),
+    };
+
+    public static bool TryParse(string? name, out DesktopQualityPreset preset) =>
+        Enum.TryParse(name, ignoreCase: true, out preset);
+}
+
 /// <summary>Codec/mode negotiation — pure logic, unit-tested.</summary>
 public static class DesktopNegotiation
 {

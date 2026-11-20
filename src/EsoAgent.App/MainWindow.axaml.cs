@@ -109,7 +109,17 @@ public sealed partial class MainWindow : Window
             }
             await RefreshDevicesAsync();
         };
-        Closed += (_, _) => DesktopTab.Detach();
+        Closed += (_, _) => { DesktopTab.Detach(); TerminalTab.Detach(); };
+        // Phase 3 session fullscreen: the Desktop view raises it, the shell
+        // owns the window state and hides its own chrome (header, home
+        // column, status bar) so the session gets the whole window.
+        DesktopTab.FullscreenChanged += fs =>
+        {
+            WindowState = fs ? WindowState.FullScreen : WindowState.Normal;
+            HeaderBar.IsVisible = !fs;
+            HomePanel.IsVisible = !fs;
+            StatusBarText.IsVisible = !fs;
+        };
     }
 
     private void LoadHomeState()
@@ -196,6 +206,8 @@ public sealed partial class MainWindow : Window
         RecentLabel.Text = Strings.T("Recent");
         FlowDirection = Strings.IsArabic ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight;
         FilesTab.ApplyLanguage();
+        DesktopTab.ApplyLanguage();
+        TerminalTab.ApplyLanguage();
         ActivityTab.ApplyLanguage();
         UpdateGroupFilter();
         UpdateIdentityCard();

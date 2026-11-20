@@ -4,6 +4,40 @@ All notable changes to EsoAgent are documented here. The project follows
 semantic versioning; the version lives in one place (`Directory.Build.props`)
 and is stamped on every surface — agent, fleet server, client, and app.
 
+## [Unreleased]
+
+UI overhaul Phase 3 — the session experience in the desktop app:
+
+- **Session window chrome** — the desktop tab's toolbar is now a two-row
+  session bar where every action is one click: fullscreen (button or
+  F11; the shell hides its own chrome), scaling modes (Fit / Actual size
+  / Stretch, applied locally with pointer mapping to match), named
+  quality presets (Auto / Balanced / Speed / Quality) instead of the raw
+  numeric spinner, a Send Ctrl+Alt+Del button, live session stats
+  measured from frame arrivals (fps, resolution, frame size,
+  throughput), and chat as a slide-over panel with an unread badge
+  instead of a permanently docked block.
+- **Frame-rate ceiling raised** — the app's hard-coded 12 fps cap is
+  gone. Presets request up to the 30 fps ceiling every agent capture
+  path already enforces, and the default (Auto) lets the agent's
+  adaptive quality tune the real rate to the measured link, never below
+  the legibility floor.
+- **Dual-pane Files with a transfer queue** — this computer on the
+  left, the device on the right; drag & drop both ways (and from the OS
+  onto the device pane); transfers run through a queue with per-file
+  progress, speed and cancel. The chunk protocol is unchanged (resumable
+  begin/chunk/commit, ranged download, SHA-256 verified); cancellation
+  lands at a chunk boundary and a cancelled upload's partial stays on
+  the device, resumable by the next attempt. File transfer is now
+  select → one click (or drag) — no OS dialogs.
+- **Persistent terminal sessions** — the Terminal tab now attaches to
+  the agent-hosted persistent shell sessions (present since v1.2 but
+  never used by the app): the shell keeps its cwd and environment on
+  the device, output is caught up by sequence number on reattach, and
+  switching devices or tabs never tears a session down. Command history
+  (↑/↓) included; devices without the session service keep the one-shot
+  runner as a fallback.
+
 ## [1.2.7] — 2026-11-20
 
 - **First-run console discovery** — the agent publishes a small non-secret
