@@ -4,6 +4,20 @@ All notable changes to EsoAgent are documented here. The project follows
 semantic versioning; the version lives in one place (`Directory.Build.props`)
 and is stamped on every surface — agent, fleet server, client, and app.
 
+## [1.2.6] — 2026-11-20
+
+- **Mesh relay fix** — the device-side relay shim ran both directions over a
+  single loopback-bound UDP socket, and a loopback-bound socket cannot send
+  to a remote relay endpoint: relayed WireGuard traffic silently never left
+  the device whenever the fleet relay was on another host. Each shim now
+  uses two sockets — loopback for the local WireGuard, wildcard/ephemeral
+  for the relay — so relayed peers handshake and pass traffic through the
+  fleet relay as designed.
+- **Shim port default** — the default first relay-shim port moves from
+  51821 to 51831, clear of the fleet server's default UDP relay port
+  (51821), so an agent co-hosted with the server no longer hits a bind
+  collision ("Address already in use") on its shim.
+
 ## [1.2.0] — 2026-11-18
 
 The unification + surpass release: one product, one backend, one device

@@ -106,8 +106,11 @@ public sealed class MeshOptions
     /// eso-mesh.exe sidecar. Null = the copy installed next to the agent
     /// executable (the normal case; the installer stages it there).</summary>
     public string? EnginePath { get; set; }
-    /// <summary>First loopback port for per-peer relay shims.</summary>
-    public int RelayShimBasePort { get; set; } = 51821;
+    /// <summary>First loopback port for per-peer relay shims. Kept clear of
+    /// the fleet server's default UDP relay port (51821): when an agent and
+    /// the server share a host, equal defaults make the shim's loopback bind
+    /// collide with the relay's wildcard bind.</summary>
+    public int RelayShimBasePort { get; set; } = 51831;
     /// <summary>Exit node (v1.2): when true AND the fleet has a designated exit
     /// node, this device routes ALL its WireGuard traffic (0.0.0.0/0) via that
     /// node. Off by default — routing your whole traffic through another
