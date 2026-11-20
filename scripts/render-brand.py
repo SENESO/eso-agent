@@ -13,13 +13,17 @@ Outputs:
   assets/brand/svg/logo-lockup-{dark,light}.svg
   assets/brand/png/mark-{16..512}.png       transparent mark
   assets/brand/png/app-icon-{16..512}.png  tile form (app icon)
+  assets/brand/app.ico                     multi-res app icon (16..256,
+                                           PNG entries) — THE exe/shortcut
+                                           icon; copied to
+                                           src/EsoAgent.App/Assets/
   assets/brand/png/logo-lockup-{dark,light}.png
   assets/brand/png/tray-{online,offline,controlled,locked}.ico (+ -48.png)
   assets/brand/png/tray-controlled-pulse.ico   (pulse frame B)
   src/EsoAgent.App/Assets/tray-{online,offline,controlled}.png
   src/EsoAgent.Tray/Assets/*.ico (copies of the tray ICOs)
 """
-import io, math, os, struct
+import io, math, os, shutil, struct
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -224,6 +228,13 @@ def main():
         render_mark(size).save(os.path.join(OUT, f"mark-{size}.png"))
         render_tile(size).save(os.path.join(OUT, f"app-icon-{size}.png"))
     render_tile(256).save(os.path.join(OUT, "app-icon.png"))
+    # THE application icon: every Windows size incl. 20 (taskbar small),
+    # all entries PNG-compressed (write_ico stores PNG data throughout).
+    app_ico = os.path.join(ROOT, "assets", "brand", "app.ico")
+    write_ico(app_ico, [render_tile(s) for s in (16, 20, 24, 32, 48, 64, 128, 256)])
+    app_assets_dir = os.path.join(ROOT, "src", "EsoAgent.App", "Assets")
+    os.makedirs(app_assets_dir, exist_ok=True)
+    shutil.copyfile(app_ico, os.path.join(app_assets_dir, "app.ico"))
     for variant in ("dark", "light"):
         draw_lockup(variant).save(os.path.join(OUT, f"logo-lockup-{variant}.png"))
     states = {

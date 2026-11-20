@@ -6,57 +6,222 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EsoAgent Fleet — Owner Panel</title>
 <style>
-  :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3; --mut:#8b949e; --acc:#E3B341; --bad:#f85149; --ok:#3fb950; --warn:#d29922; }
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); margin: 0; }
-  header { display:flex; align-items:center; gap:1rem; padding:.7rem 1rem; background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
-  header h1 { font-size:1.05rem; margin:0; }
-  header form { margin-left:auto; }
-  nav { display:flex; flex-wrap:wrap; gap:.4rem; padding:.6rem 1rem; border-bottom:1px solid var(--line); }
-  nav button { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:.45rem .8rem; cursor:pointer; }
-  nav button.active { border-color:var(--acc); color:var(--acc); }
-  main { padding:1rem; max-width:1150px; margin:0 auto; }
-  section { display:none; } section.active { display:block; }
-  table { width:100%; border-collapse:collapse; font-size:.9rem; }
-  th, td { text-align:left; padding:.45rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { color:var(--mut); font-weight:600; }
-  button.act { background:#21262d; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:.3rem .6rem; cursor:pointer; }
-  button.act:hover { border-color:var(--acc); }
-  button.danger:hover { border-color:var(--bad); color:var(--bad); }
-  button.primary { background:#E3B341; border-color:#E3B341; color:#141414; font-weight:600; }
-  input, select, textarea { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:.5rem; font:inherit; }
-  textarea { width:100%; min-height:80px; font-family:ui-monospace, monospace; }
-  pre.out { background:#010409; border:1px solid var(--line); border-radius:8px; padding:.8rem; white-space:pre-wrap; word-break:break-word; max-height:55vh; overflow:auto; font-size:.85rem; }
-  .row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:.7rem; }
-  .mut { color:var(--mut); } .ok { color:var(--ok); } .bad { color:var(--bad); }
-  .badge { border:1px solid var(--line); border-radius:999px; padding:.05rem .5rem; font-size:.8rem; }
-  .badge.on { border-color:var(--ok); color:var(--ok); }
-  .badge.pend { border-color:var(--warn); color:var(--warn); }
-  .badge.rej { border-color:var(--bad); color:var(--bad); }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.8rem; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem; }
-  .card h3 { margin:.1rem 0 .5rem; font-size:.85rem; color:var(--mut); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
-  .card .big { font-size:1.25rem; font-weight:700; }
-  .card .small { color:var(--mut); font-size:.85rem; }
-  code { font-family:ui-monospace, monospace; word-break:break-all; }
-  .banner { border:1px solid var(--bad); background:#3d1d1d; border-radius:8px; padding:.7rem .9rem; margin-bottom:.8rem; }
-  :focus-visible { outline:2px solid var(--acc); outline-offset:1px; }
-  button, input, select, textarea { transition:border-color .15s ease, background .15s ease; }
-  .brandmark { display:inline-flex; border-radius:8px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.45); }
-  header h1 { letter-spacing:.01em; }
+  /* ESO:TOKENS */
+/* EsoAgent design tokens — the single source for every surface.
+   Web panels consume the light theme (:root). The dark variant below is the
+   refined-dark token set the desktop App's resource dictionary mirrors
+   (src/EsoAgent.App/Themes/EsoTokens.axaml). Gold is an accent only:
+   primary actions, active states, the wing mark — never a theme.
+   Contrast gate: every text/background pair >= 4.5:1, verified by
+   scripts/check-contrast.py. Semantic colours pair a fill value (dots,
+   borders) with a -tx value darkened/lightened until it passes as text. */
+:root {
+  /* surfaces & text (light — the website law: soft, comfortable, light) */
+  --bg: #F7F5F1;
+  --surface: #FFFFFF;
+  --surface-2: #FBFAF7;
+  --line: #E6E1D6;
+  --txt: #20242E;
+  --mut: #646B76;
+  /* brand accent */
+  --acc: #8A6508;
+  --acc-solid: #E3B341;
+  --on-acc: #1A1A1A;
+  --acc-bg: #FAF1DA;
+  /* state semantics: fill / text-safe / tint */
+  --ok: #2F9E44;
+  --ok-tx: #1E7A34;
+  --ok-bg: #E7F5EC;
+  --warn: #E08A00;
+  --warn-tx: #8F5E00;
+  --warn-bg: #FBF0DC;
+  --bad: #D64545;
+  --bad-tx: #B02A2A;
+  --bad-bg: #FBEAEA;
+  --bad-bg-strong: #F9DADA;
+  --mut-bg: #F0EEE8;
+  /* type scale (system UI stack on both platforms) */
+  --fs-1: 12px;
+  --fs-2: 13px;
+  --fs-3: 14px;
+  --fs-4: 16px;
+  --fs-5: 20px;
+  --fs-6: 24px;
+  /* spacing: 4-pt scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  /* radii: 8 controls, 12 cards, 999 badges */
+  --r-ctl: 8px;
+  --r-card: 12px;
+  --r-badge: 999px;
+  /* elevation: one soft shadow level, dialogs/menus only */
+  --shadow: 0 8px 30px rgba(32, 36, 46, .16), 0 2px 6px rgba(32, 36, 46, .10);
+  --row-h: 36px;
+}
+[data-theme="dark"] {
+  /* refined dark — same tokens, App variant */
+  --bg: #131519;
+  --surface: #1B1E24;
+  --surface-2: #21252D;
+  --line: #2C3038;
+  --txt: #ECEEF2;
+  --mut: #9BA1AC;
+  --acc: #E3B341;
+  --acc-solid: #E3B341;
+  --on-acc: #1A1A1A;
+  --acc-bg: #33290F;
+  --ok: #3FB950;
+  --ok-tx: #4CC38A;
+  --ok-bg: #14301F;
+  --warn: #D29922;
+  --warn-tx: #E3B341;
+  --warn-bg: #38300F;
+  --bad: #F87171;
+  --bad-tx: #F08A8A;
+  --bad-bg: #3A1F22;
+  --bad-bg-strong: #4A262B;
+  --mut-bg: #262A31;
+  --shadow: 0 8px 30px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .4);
+}
+  /* /ESO:TOKENS */
+  /* ESO:COMPONENTS */
+/* EsoAgent shared components — built only on tokens.css variables.
+   Synced verbatim into Fleet.html and Dashboard.html by
+   scripts/sync-web-assets.py; edit here, never in the HTML copies. */
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); margin: 0; font-size: var(--fs-3); }
+header { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: var(--fs-4); margin: 0; letter-spacing: .01em; }
+header form { margin-left: auto; }
+.brandmark { display: inline-flex; border-radius: var(--r-ctl); overflow: hidden; box-shadow: 0 1px 4px rgba(32, 36, 46, .18); flex: none; }
+nav { display: flex; flex-wrap: wrap; gap: var(--sp-1); padding: var(--sp-2) var(--sp-4); background: var(--surface-2); border-bottom: 1px solid var(--line); }
+nav button { background: transparent; color: var(--mut); border: 1px solid transparent; border-radius: var(--r-ctl); padding: var(--sp-2) var(--sp-3); cursor: pointer; font: inherit; font-weight: 600; }
+nav button:hover { color: var(--txt); background: var(--surface); border-color: var(--line); }
+nav button.active { background: var(--surface); color: var(--acc); border-color: var(--line); box-shadow: inset 0 -2px 0 var(--acc-solid); }
+main { padding: var(--sp-4); max-width: 1150px; margin: 0 auto; }
+section { display: none; }
+section.active { display: block; }
+h2.sect { font-size: var(--fs-5); margin: var(--sp-2) 0 var(--sp-3); }
+.row { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-bottom: var(--sp-3); }
+.mut { color: var(--mut); }
+.ok { color: var(--ok-tx); }
+.bad { color: var(--bad-tx); }
+.warn { color: var(--warn-tx); }
+.small { color: var(--mut); font-size: var(--fs-2); }
+code { font-family: ui-monospace, monospace; word-break: break-all; font-size: .92em; }
+a { color: var(--acc); }
+
+/* buttons */
+button.act, a.act { background: var(--surface); color: var(--txt); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-1) var(--sp-3); cursor: pointer; font: inherit; font-size: var(--fs-2); display: inline-block; text-decoration: none; line-height: 1.55; }
+button.act:hover, a.act:hover { border-color: var(--acc); }
+button.act:disabled { opacity: .5; cursor: default; }
+button.act:disabled:hover { border-color: var(--line); }
+button.danger { color: var(--bad-tx); }
+button.danger:hover { border-color: var(--bad); background: var(--bad-bg); }
+button.primary { background: var(--acc-solid); border-color: var(--acc-solid); color: var(--on-acc); font-weight: 700; }
+button.primary:hover { border-color: var(--acc); filter: brightness(1.04); }
+
+/* inputs */
+input, select, textarea { background: var(--surface); color: var(--txt); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-2); font: inherit; font-size: var(--fs-3); }
+input::placeholder, textarea::placeholder { color: var(--mut); }
+textarea { width: 100%; min-height: 80px; font-family: ui-monospace, monospace; }
+label.chk { display: inline-flex; gap: var(--sp-1); align-items: center; font-size: var(--fs-2); color: var(--mut); }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); background: var(--surface); }
+th, td { text-align: left; padding: var(--sp-2); border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { color: var(--mut); font-weight: 600; font-size: var(--fs-1); text-transform: uppercase; letter-spacing: .04em; background: var(--surface-2); }
+tbody tr:hover { background: var(--surface-2); }
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--txt); }
+th.sortable .arr { color: var(--acc); font-size: 10px; }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tablewrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); overflow: auto; }
+.tablewrap table { background: transparent; }
+.tablewrap tbody tr:last-child td { border-bottom: 0; }
+
+/* badges: colour + label, never colour alone */
+.badge { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--mut-bg); color: var(--mut); border-radius: var(--r-badge); padding: 1px var(--sp-2); font-size: var(--fs-1); font-weight: 600; white-space: nowrap; }
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mut); flex: none; }
+.badge.on { border-color: var(--ok); background: var(--ok-bg); color: var(--ok-tx); }
+.badge.on .dot { background: var(--ok); }
+.badge.off { border-color: var(--line); background: var(--mut-bg); color: var(--mut); }
+.badge.pend { border-color: var(--warn); background: var(--warn-bg); color: var(--warn-tx); }
+.badge.pend .dot { background: var(--warn); }
+.badge.rej, .badge.bad { border-color: var(--bad); background: var(--bad-bg); color: var(--bad-tx); }
+.badge.rej .dot, .badge.bad .dot { background: var(--bad); }
+.badge.acc { border-color: var(--acc-solid); background: var(--acc-bg); color: var(--acc); }
+
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-3); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--sp-4); }
+.card h3 { margin: var(--sp-1) 0 var(--sp-2); font-size: var(--fs-1); color: var(--mut); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.card .big { font-size: var(--fs-5); font-weight: 700; }
+.card .small { color: var(--mut); font-size: var(--fs-2); }
+.stat .big { font-size: var(--fs-6); }
+.meter { height: 6px; border-radius: 3px; background: var(--mut-bg); overflow: hidden; margin-top: var(--sp-2); }
+.meter > div { height: 100%; background: var(--acc-solid); border-radius: 3px; }
+
+/* banners, empty states, output */
+.banner { border: 1px solid var(--bad); background: var(--bad-bg); color: var(--bad-tx); border-radius: var(--r-ctl); padding: var(--sp-3); margin-bottom: var(--sp-3); font-weight: 600; }
+.banner.off { border-color: var(--ok); background: var(--ok-bg); color: var(--ok-tx); }
+.empty { border: 1px dashed var(--line); border-radius: var(--r-card); padding: var(--sp-5); text-align: center; color: var(--mut); background: var(--surface-2); }
+.outbox { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-3); white-space: pre-wrap; word-break: break-word; max-height: 55vh; overflow: auto; font-size: var(--fs-2); font-family: ui-monospace, monospace; }
+.logview { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); overflow: auto; max-height: 60vh; font-family: ui-monospace, monospace; font-size: var(--fs-1); }
+.logview .lrow { padding: 3px var(--sp-3); border-bottom: 1px solid var(--line); white-space: pre-wrap; word-break: break-word; }
+.logview .lrow:last-child { border-bottom: 0; }
+.logview .lrow:hover { background: var(--surface-2); }
+
+/* chat (slide-over style list, not a text dump) */
+.chatlog { display: flex; flex-direction: column; gap: var(--sp-1); max-height: 22vh; overflow: auto; padding: var(--sp-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl); }
+.chatlog .msg { max-width: 85%; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-ctl); background: var(--surface); border: 1px solid var(--line); font-size: var(--fs-2); align-self: flex-start; }
+.chatlog .msg.me { align-self: flex-end; background: var(--acc-bg); border-color: var(--acc-solid); }
+.chatlog .msg .who { display: block; font-size: var(--fs-1); color: var(--mut); margin-bottom: 1px; }
+
+/* dialog (replaces prompt/confirm/alert everywhere) */
+.dlg-back { position: fixed; inset: 0; background: rgba(32, 36, 46, .42); display: flex; align-items: center; justify-content: center; z-index: 50; padding: var(--sp-4); }
+.dlg { background: var(--surface); color: var(--txt); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); width: min(94vw, 460px); max-height: 88vh; overflow: auto; padding: var(--sp-5); }
+.dlg h2 { font-size: var(--fs-4); margin: 0 0 var(--sp-2); }
+.dlg .dlg-msg { color: var(--mut); font-size: var(--fs-3); margin: 0 0 var(--sp-4); white-space: pre-wrap; }
+.dlg label.f { display: block; font-size: var(--fs-2); color: var(--mut); margin-bottom: var(--sp-1); font-weight: 600; }
+.dlg input[type="text"], .dlg input[type="number"], .dlg textarea, .dlg select { width: 100%; margin-bottom: var(--sp-3); }
+.dlg .checks { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.dlg .checks label { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-3); }
+.dlg .dlg-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-2); }
+.dlg .dlg-err { color: var(--bad-tx); font-size: var(--fs-2); min-height: 1em; margin-bottom: var(--sp-2); }
+
+/* toasts (non-blocking results, e.g. Wake-on-LAN) */
+#toasts { position: fixed; bottom: var(--sp-4); right: var(--sp-4); z-index: 60; display: flex; flex-direction: column; gap: var(--sp-2); max-width: min(92vw, 380px); }
+.toast { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--acc-solid); border-radius: var(--r-ctl); box-shadow: var(--shadow); padding: var(--sp-3); font-size: var(--fs-2); }
+.toast.ok { border-left-color: var(--ok); }
+.toast.bad { border-left-color: var(--bad); }
+
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+button, input, select, textarea, nav button { transition: border-color .15s ease, background .15s ease, color .15s ease; }
+canvas.screen { width: 100%; background: #101216; border: 1px solid var(--line); border-radius: var(--r-ctl); outline: none; display: block; }
+  /* /ESO:COMPONENTS */
+  .dv-sub.active { border-color: var(--acc); color: var(--acc); background: var(--acc-bg); }
+  .toolbar input[type="search"] { flex: 1; min-width: 180px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-4); }
+  .subhead { font-size: var(--fs-4); margin: var(--sp-5) 0 var(--sp-3); }
+  td .act { margin-top: var(--sp-1); }
 </style>
 </head>
 <body>
 <header>
   <span class="brandmark"><svg width="30" height="30" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">      <defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F7DC8F"/><stop offset="0.45" stop-color="#E9BE57"/><stop offset="0.75" stop-color="#C9962E"/><stop offset="1" stop-color="#9A7418"/></linearGradient></defs>   <g fill="url(#gold)">   <polygon points="20,52 68,26 58,36 29,50"/>   <polygon points="28,54 64,36 54,48 34,57"/>   <polygon points="35,59 54,49 48,60 37,66"/>   <polygon points="36,67 51,62 46,69 36,72"/>   <polygon points="21,54 38,60 34,79"/>   </g>   <g stroke="url(#gold)">   <path d="M 56.4,41.0 A 13,13 0 0 1 56.4,61.0" fill="none" stroke-width="5.0" stroke-linecap="round"/>   <path d="M 62.8,33.4 A 23,23 0 0 1 62.8,68.6" fill="none" stroke-width="5.0" stroke-linecap="round"/>   <path d="M 69.2,25.7 A 33,33 0 0 1 69.2,76.3" fill="none" stroke-width="5.0" stroke-linecap="round"/>   </g> </svg></span><h1 data-i18n="fleetTitle">EsoAgent Fleet</h1>
   <span class="mut" id="hdrInfo"></span>
-  <span class="badge" id="hdrAlerts" style="display:none;border-color:var(--warn);color:var(--warn)"></span>
+  <span class="badge pend" id="hdrAlerts" style="display:none"></span>
   <button class="act" id="langToggle" style="margin-left:auto">العربية</button>
   <form method="post" action="/panel/logout" style="margin-left:0"><button class="act" type="submit" data-i18n="signOut">Sign out</button></form>
 </header>
 <nav id="tabs">
-  <button data-tab="devices" class="active" data-i18n="devices">Devices</button>
-  <button data-tab="console" data-i18n="console">Device console</button>
+  <button data-tab="overview" class="active" data-i18n="overview">Overview</button>
+  <button data-tab="devices" data-i18n="devices">Devices</button>
   <button data-tab="activity" data-i18n="activity">Activity</button>
   <button data-tab="scripts" data-i18n="scripts">Scripts</button>
   <button data-tab="mesh" data-i18n="mesh">Mesh</button>
@@ -64,30 +229,45 @@
   <button data-tab="access" data-i18n="access">Access</button>
 </nav>
 <main>
-  <section id="tab-devices" class="active">
-    <div class="row"><button class="act" id="devRefresh">Refresh</button><span class="mut">Pending devices appear here automatically when an agent first connects. Nothing can control a device until you approve it.</span></div>
-    <table><thead><tr><th>Code</th><th>Name</th><th>OS</th><th>IPs</th><th>State</th><th>Groups</th><th>Last seen</th><th></th></tr></thead><tbody id="devBody"></tbody></table>
+  <section id="tab-overview" class="active">
+    <div class="stat-grid">
+      <div class="card stat"><h3 data-i18n="devices">Devices</h3><div class="big" id="ovTotal">…</div><div class="small" id="ovTotalSub"></div></div>
+      <div class="card stat"><h3>Online</h3><div class="big ok" id="ovOnline">…</div><div class="small" id="ovOffline"></div></div>
+      <div class="card stat"><h3>Pending approval</h3><div class="big" id="ovPending">…</div><div class="small">New devices wait here</div></div>
+      <div class="card stat"><h3>Health failures</h3><div class="big" id="ovHealth">…</div><div class="small">From the latest doctor runs</div></div>
+      <div class="card stat"><h3>Alerts · 24 h</h3><div class="big" id="ovAlerts">…</div><div class="small">Offline devices, low disk, failed logins</div></div>
+    </div>
+    <div id="ovPendingWrap" style="display:none">
+      <h2 class="subhead">Waiting for approval</h2>
+      <div class="tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>OS</th><th>First seen</th><th></th></tr></thead><tbody id="ovPendingBody"></tbody></table></div>
+    </div>
+    <h2 class="subhead">Recent activity</h2>
+    <div class="tablewrap"><table><thead><tr><th>Time</th><th>Source</th><th>Device</th><th>Event</th><th>Result</th></tr></thead><tbody id="ovRecentBody"></tbody></table></div>
+    <div class="empty" id="ovRecentEmpty" style="display:none">No activity yet.</div>
   </section>
 
-  <section id="tab-console">
-    <div class="row">
-      <select id="conDevice"></select>
-      <select id="conShell"><option value="default">Default shell</option><option value="powershell">PowerShell</option><option value="bash">bash</option><option value="sh">sh</option><option value="cmd">cmd.exe</option></select>
-      <button class="act primary" id="conRun">Run</button>
-      <button class="act" data-quick="/api/status">Status</button>
-      <button class="act" data-quick="/api/software">Software</button>
-      <button class="act" data-quick="/api/services">Services</button>
-      <button class="act" data-quick="/api/processes">Processes</button>
+  <section id="tab-devices">
+    <div class="row toolbar">
+      <button class="act" id="devRefresh" data-i18n="refresh">Refresh</button>
+      <input type="search" id="devSearch" data-i18n-ph="searchDevices" placeholder="Search code, name, OS, group…">
+      <select id="devStateFilter">
+        <option value="">All states</option><option value="online">Online</option><option value="offline">Offline</option>
+        <option value="Pending">Pending approval</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option>
+      </select>
+      <select id="devGroupFilter"><option value="">All groups</option></select>
     </div>
-    <textarea id="conScript" placeholder="Command to run on the selected device (panel-signed, fully audited)…"></textarea>
-    <pre class="out" id="conOut" style="display:none"></pre>
-    <p class="mut">Full device dashboard (when you're on the same tailnet): <code id="conDirect"></code></p>
+    <p class="small">Pending devices appear here automatically when an agent first connects. Nothing can control a device until you approve it.</p>
+    <div class="tablewrap"><table><thead><tr>
+      <th class="sortable" data-sort="code">Code</th><th class="sortable" data-sort="name">Name</th><th class="sortable" data-sort="os">OS</th><th>IPs</th>
+      <th class="sortable" data-sort="state">State</th><th>Groups</th><th class="sortable" data-sort="lastSeen">Last seen</th><th></th>
+    </tr></thead><tbody id="devBody"></tbody></table></div>
+    <div class="empty" id="devEmpty" style="display:none">No devices match.</div>
   </section>
 
   <section id="tab-mesh">
-    <div class="row"><button class="act" id="meshRefresh">Refresh</button><span class="mut" id="meshInfo">WireGuard mesh · range 10.77.0.0/16 · devices are reachable by name (MagicDNS-lite hosts sync)</span></div>
-    <table><thead><tr><th>Device</th><th>Virtual IP</th><th>WireGuard key</th><th>Advertised subnets</th><th>Approved subnets</th><th></th></tr></thead><tbody id="meshBody"></tbody></table>
-    <div class="cards">
+    <div class="row"><button class="act" id="meshRefresh" data-i18n="refresh">Refresh</button><span class="mut" id="meshInfo">WireGuard mesh · range 10.77.0.0/16 · devices are reachable by name (MagicDNS-lite hosts sync)</span></div>
+    <div class="tablewrap"><table><thead><tr><th>Device</th><th>Virtual IP</th><th>WireGuard key</th><th>Advertised subnets</th><th>Approved subnets</th><th></th></tr></thead><tbody id="meshBody"></tbody></table></div>
+    <div class="cards" style="margin-top:var(--sp-3)">
       <div class="card"><h3>ACL rules</h3>
         <p class="small">One rule per line: <code>from -> to [ports]</code> — from/to are device codes or <code>group:name</code>; ports comma-separated, empty = all. Default posture: fleet members can reach each other's agent port (8737); everything else is denied at the device firewall.</p>
         <textarea id="aclText" style="min-height:90px" placeholder="group:servers -> ABCD-1234 22,3389"></textarea>
@@ -108,8 +288,9 @@
   </section>
 
   <section id="tab-audit">
-    <div class="row"><button class="act" id="auditRefresh">Refresh</button></div>
-    <pre class="out" id="auditOut"></pre>
+    <div class="row"><button class="act" id="auditRefresh" data-i18n="refresh">Refresh</button><span class="mut">Last 300 audit lines.</span></div>
+    <div class="tablewrap"><table><thead><tr><th style="width:15rem">Time</th><th>Entry</th></tr></thead><tbody id="auditBody"></tbody></table></div>
+    <div class="empty" id="auditEmpty" style="display:none">No audit lines yet.</div>
   </section>
 
   <section id="tab-activity">
@@ -118,14 +299,15 @@
       <select id="actSource"><option value="">All sources</option><option value="device">device</option><option value="server">server</option><option value="operator">operator</option><option value="owner">owner</option><option value="alert">alerts only</option></select>
       <input id="actSince" type="datetime-local" title="Since">
       <button class="act" id="actRefresh" data-i18n="refresh">Refresh</button>
-      <a class="act" id="actExportJson" href="#" style="text-decoration:none;padding:.3rem .6rem;border:1px solid var(--line);border-radius:6px;color:var(--txt)">Export JSON</a>
-      <a class="act" id="actExportCsv" href="#" style="text-decoration:none;padding:.3rem .6rem;border:1px solid var(--line);border-radius:6px;color:var(--txt)">Export CSV</a>
+      <a class="act" id="actExportJson" href="#">Export JSON</a>
+      <a class="act" id="actExportCsv" href="#">Export CSV</a>
     </div>
-    <pre class="out" id="actOut"></pre>
+    <div class="tablewrap"><table><thead><tr><th>Time</th><th>Source</th><th>Device</th><th>Event</th><th>Result</th></tr></thead><tbody id="actBody"></tbody></table></div>
+    <div class="empty" id="actEmpty" style="display:none">No activity matches.</div>
   </section>
 
   <section id="tab-scripts">
-    <div class="cards" style="margin-bottom:.8rem">
+    <div class="cards" style="margin-bottom:var(--sp-3)">
       <div class="card"><h3 data-i18n="addScript">Add / edit script</h3>
         <div class="row"><input id="scName" placeholder="Name" style="flex:1"><select id="scShell"><option value="default">Default shell</option><option value="powershell">PowerShell</option><option value="bash">bash</option><option value="sh">sh</option><option value="cmd">cmd.exe</option></select></div>
         <textarea id="scBody" placeholder="Script body…"></textarea>
@@ -136,17 +318,18 @@
         <div class="row"><select id="scPick" style="flex:1"></select></div>
         <div class="row"><input id="scTargets" placeholder="Codes, e.g. ABCD-1234, EFGH-5678" style="flex:1"></div>
         <div class="row"><button class="act primary" id="scRun">Run</button></div>
-        <pre class="out" id="scOut" style="display:none;max-height:35vh"></pre>
+        <div id="scOut" style="display:none"></div>
       </div>
     </div>
-    <table><thead><tr><th>Name</th><th>Shell</th><th>By</th><th>Updated</th><th></th></tr></thead><tbody id="scBody2"></tbody></table>
+    <div class="tablewrap"><table><thead><tr><th>Name</th><th>Shell</th><th>By</th><th>Updated</th><th></th></tr></thead><tbody id="scBody2"></tbody></table></div>
   </section>
 
   <section id="tab-device">
     <div class="row">
       <button class="act" id="dvBack" data-i18n="back">← All devices</button>
-      <h2 id="dvTitle" style="margin:0;font-size:1.1rem"></h2>
+      <h2 id="dvTitle" style="margin:0;font-size:var(--fs-4)"></h2>
       <span class="mut" id="dvHealth"></span>
+      <button class="act primary" id="dvDesktopCta" data-i18n="desktop">Desktop</button>
     </div>
     <div class="row">
       <button class="act dv-sub active" data-sub="status" data-i18n="status">Status</button>
@@ -163,7 +346,7 @@
         <button class="act" data-dvquick="/api/inventory">Inventory</button>
         <button class="act" data-dvquick="/api/patch">Patch check</button>
       </div>
-      <pre class="out" id="dvStatusOut"></pre>
+      <div id="dvStatusOut"><p class="mut">Pick a check to run it on this device.</p></div>
     </div>
 
     <div id="dv-desktop" style="display:none">
@@ -171,18 +354,18 @@
         <select id="fdMode"><option value="View">View only</option><option value="Control" selected>Control</option></select>
         <select id="fdQuality"><option value="40">Quality: low</option><option value="60" selected>Quality: balanced</option><option value="85">Quality: high</option></select>
         <select id="fdMonitor"></select>
-        <label class="small"><input type="checkbox" id="fdRecord"> Record session</label>
+        <label class="chk"><input type="checkbox" id="fdRecord"> Record session</label>
         <button class="act primary" id="fdStart">Start session</button>
         <button class="act danger" id="fdStop" disabled>Stop</button>
         <button class="act" id="fdPrivacy" disabled>Privacy: off</button>
         <span class="mut" id="fdState">Relayed through this panel — the device verifies the panel's signature itself.</span>
       </div>
-      <canvas id="fdCanvas" width="960" height="540" tabindex="0" style="width:100%;background:#000;border:1px solid var(--line);border-radius:8px;outline:none"></canvas>
-      <div class="row" style="margin-top:.5rem">
+      <canvas id="fdCanvas" class="screen" width="960" height="540" tabindex="0"></canvas>
+      <div class="row" style="margin-top:var(--sp-2)">
         <input id="fdChatIn" placeholder="Message the person at the device…" style="flex:1">
         <button class="act" id="fdChatSend" disabled>Send chat</button>
       </div>
-      <pre class="out" id="fdChatLog" style="display:none;max-height:18vh"></pre>
+      <div class="chatlog" id="fdChatLog" style="display:none"></div>
     </div>
 
     <div id="dv-files" style="display:none">
@@ -193,12 +376,13 @@
         <label class="act" style="cursor:pointer">Upload here <input type="file" id="dvFileUpload" style="display:none"></label>
       </div>
       <div class="mut" id="dvFileMsg"></div>
-      <table><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="dvFileBody"></tbody></table>
+      <div class="tablewrap"><table><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="dvFileBody"></tbody></table></div>
     </div>
 
     <div id="dv-activity" style="display:none">
       <div class="row"><button class="act" id="dvActRefresh" data-i18n="refresh">Refresh</button></div>
-      <pre class="out" id="dvActOut"></pre>
+      <div class="tablewrap"><table><thead><tr><th>Time</th><th>Source</th><th>Event</th><th>Result</th></tr></thead><tbody id="dvActBody"></tbody></table></div>
+      <div class="empty" id="dvActEmpty" style="display:none">No activity for this device yet.</div>
     </div>
   </section>
 
@@ -246,7 +430,7 @@
           <label><input type="checkbox" id="acViewOnly"> view-only</label>
         </div>
         <div class="row"><button class="act primary" id="acCreate">Create access code</button></div>
-        <p id="acCreated" style="display:none">Code: <code id="acCode" style="font-size:1.2rem"></code> <span class="small">(shown once — copy it now)</span></p>
+        <p id="acCreated" style="display:none">Code: <code id="acCode" style="font-size:var(--fs-4)"></code> <span class="small">(shown once — copy it now)</span></p>
         <div id="acLists" class="small"></div>
       </div>
       <div class="card"><h3>Server certificate fingerprint</h3><p><code id="accFp">…</code></p>
@@ -255,6 +439,160 @@
   </section>
 </main>
 
+<script>
+// ESO:COMPONENTS-JS
+/* EsoAgent shared components (JS) — in-page dialogs and toasts replace every
+   native browser dialog; formatters keep times and sizes human.
+   Synced verbatim into Fleet.html and Dashboard.html by
+   scripts/sync-web-assets.py; edit here, never in the HTML copies. */
+function esoEl(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+/* Generic modal. spec: {title, message, fields:[{id,label,type,value,options,checked}],
+   actions:[{id,label,kind}]} -> Promise<{action, values} | null> (null = dismissed). */
+function esoDialog(spec) {
+  return new Promise(resolve => {
+    const back = esoEl('div', 'dlg-back');
+    const dlg = esoEl('div', 'dlg');
+    dlg.setAttribute('role', 'dialog');
+    dlg.setAttribute('aria-modal', 'true');
+    dlg.appendChild(esoEl('h2', '', spec.title || ''));
+    if (spec.message) dlg.appendChild(esoEl('p', 'dlg-msg', spec.message));
+    const err = esoEl('div', 'dlg-err');
+    const inputs = {};
+    (spec.fields || []).forEach(f => {
+      if (f.type === 'checks') {
+        const wrap = esoEl('div', 'checks');
+        f.options.forEach(o => {
+          const lab = esoEl('label');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.checked = !!o.checked; cb.dataset.v = o.value;
+          lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + o.label));
+          wrap.appendChild(lab);
+        });
+        inputs[f.id] = wrap;
+        dlg.appendChild(wrap);
+        return;
+      }
+      if (f.label) { const l = esoEl('label', 'f', f.label); l.htmlFor = 'dlg-' + f.id; dlg.appendChild(l); }
+      let inp;
+      if (f.type === 'select') {
+        inp = document.createElement('select');
+        (f.options || []).forEach(o => { const op = esoEl('option', '', o.label); op.value = o.value; inp.appendChild(op); });
+        inp.value = f.value ?? '';
+      } else if (f.type === 'textarea') {
+        inp = document.createElement('textarea'); inp.value = f.value ?? '';
+      } else {
+        inp = document.createElement('input');
+        inp.type = f.type || 'text'; inp.value = f.value ?? '';
+        if (f.placeholder) inp.placeholder = f.placeholder;
+      }
+      inp.id = 'dlg-' + f.id;
+      inputs[f.id] = inp;
+      dlg.appendChild(inp);
+    });
+    dlg.appendChild(err);
+    const row = esoEl('div', 'dlg-actions');
+    let done = false;
+    const close = val => { if (done) return; done = true; back.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+    const collect = () => {
+      const values = {};
+      for (const [id, inp] of Object.entries(inputs)) {
+        if (inp.classList && inp.classList.contains('checks')) values[id] = [...inp.querySelectorAll('input:checked')].map(c => c.dataset.v);
+        else values[id] = inp.value;
+      }
+      return values;
+    };
+    (spec.actions || [{id: 'ok', label: 'OK', kind: 'primary'}]).forEach(a => {
+      const b = esoEl('button', 'act' + (a.kind === 'primary' ? ' primary' : '') + (a.kind === 'danger' ? ' danger' : ''), a.label);
+      b.onclick = () => {
+        const values = collect();
+        if (spec.validate) { const msg = spec.validate(values); if (msg) { err.textContent = msg; return; } }
+        close({action: a.id, values});
+      };
+      row.appendChild(b);
+    });
+    dlg.appendChild(row);
+    back.appendChild(dlg);
+    back.addEventListener('mousedown', e => { if (e.target === back) close(null); });
+    const onKey = e => { if (e.key === 'Escape') close(null); };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(back);
+    const first = dlg.querySelector('input:not([type=checkbox]), textarea, select');
+    (first || dlg.querySelector('button')).focus();
+  });
+}
+/* Confirm dialog -> Promise<boolean>. danger=true styles the confirm action. */
+async function esoConfirm(title, message, confirmLabel, danger) {
+  const r = await esoDialog({title, message, actions: [
+    {id: 'no', label: 'Cancel'},
+    {id: 'yes', label: confirmLabel || 'Confirm', kind: danger ? 'danger' : 'primary'},
+  ]});
+  return !!r && r.action === 'yes';
+}
+/* Single-text-field dialog -> Promise<string|null> (null = cancelled). */
+async function esoTextDialog(title, label, initial, opts = {}) {
+  const r = await esoDialog({title, message: opts.message, fields: [{id: 'v', label, value: initial ?? '', placeholder: opts.placeholder}],
+    validate: opts.required ? v => (v.v.trim() ? '' : (opts.requiredMsg || 'A value is required.')) : null,
+    actions: [{id: 'no', label: 'Cancel'}, {id: 'yes', label: opts.okLabel || 'Save', kind: 'primary'}]});
+  return r && r.action === 'yes' ? r.values.v : null;
+}
+/* Non-blocking result toast (replaces the blocking alert box). kind: '' | 'ok' | 'bad'. */
+function esoToast(text, kind = '') {
+  let host = document.getElementById('toasts');
+  if (!host) { host = esoEl('div'); host.id = 'toasts'; document.body.appendChild(host); }
+  const t = esoEl('div', 'toast ' + kind, text);
+  host.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, 5200);
+}
+/* Human sizes and times (G20: no raw bytes, no raw timestamps). */
+function fmtBytes(n) {
+  if (n == null || n === '') return '—';
+  n = Number(n); if (isNaN(n)) return '—';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
+  while (n >= 1024 && i < 4) { n /= 1024; i++; }
+  return n.toFixed(1) + ' ' + u[i];
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  let rel;
+  if (s < 45) rel = 'just now';
+  else if (s < 3600) rel = Math.floor(s / 60) + ' min ago';
+  else if (s < 86400) rel = Math.floor(s / 3600) + ' h ago';
+  else rel = Math.floor(s / 86400) + ' d ago';
+  const abs = d.toLocaleString();
+  return `<span title="${abs.replace(/"/g, '&quot;')}">${rel}</span>`;
+}
+/* Render a JSON value as a key/value table (device status, doctor, diagnose…).
+   Returns an HTML string; nested objects flatten with dotted keys. */
+function kvRows(v, prefix, out) {
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const keys = Object.keys(v);
+    if (!keys.length) out.push([prefix || '—', '—']);
+    keys.forEach(k => kvRows(v[k], prefix ? prefix + '.' + k : k, out));
+  } else if (Array.isArray(v)) {
+    if (!v.length) out.push([prefix, '—']);
+    else if (v.every(x => x === null || typeof x !== 'object')) out.push([prefix, v.join(', ')]);
+    else v.forEach((x, i) => kvRows(x, prefix + '[' + i + ']', out));
+  } else {
+    out.push([prefix, v === null || v === undefined ? '—' : String(v)]);
+  }
+  return out;
+}
+function kvTable(v) {
+  const rows = kvRows(v, '', []);
+  if (!rows.length) return '<div class="empty">No data.</div>';
+  return '<div class="tablewrap"><table><tbody>' + rows.map(r =>
+    `<tr><td style="width:38%;color:var(--mut);font-weight:600">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('') + '</tbody></table></div>';
+}
+  // /ESO:COMPONENTS-JS
+</script>
 <script>
 let CSRF = '';
 const $ = id => document.getElementById(id);
@@ -274,17 +612,104 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('main section').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
   $('tab-' + b.dataset.tab).classList.add('active');
-  ({devices: loadDevices, audit: loadAudit, access: loadAccess, mesh: loadMesh, activity: loadActivity, scripts: loadScripts}[b.dataset.tab] || (()=>{}))();
+  ({overview: loadOverview, devices: loadDevices, audit: loadAudit, access: loadAccess, mesh: loadMesh, activity: loadActivity, scripts: loadScripts}[b.dataset.tab] || (()=>{}))();
 });
 
+// ----- shared activity rendering (fleet timeline, overview, device page) -----
+function resultBadge(result) {
+  const r = String(result || '');
+  if (r === 'ok' || r === 'success') return '<span class="badge on"><span class="dot"></span>' + esc(r) + '</span>';
+  if (/fail|error|denied/i.test(r)) return '<span class="badge bad"><span class="dot"></span>' + esc(r) + '</span>';
+  return '<span class="badge">' + esc(r || '—') + '</span>';
+}
+function actRow(e, withDevice) {
+  return `<tr><td class="num">${fmtTime(e.at)}</td><td><span class="badge acc">${esc(e.source)}</span></td>` +
+    (withDevice ? `<td>${esc(e.deviceName || e.deviceCode || '—')}</td>` : '') +
+    `<td><b>${esc(e.kind)}</b>: ${esc(e.summary)}</td><td>${resultBadge(e.result)}</td></tr>`;
+}
+
+// ----- fleet overview home -----
+async function loadOverview() {
+  const [devs, health, acc, recent] = await Promise.all([
+    api('/panel/api/devices'),
+    api('/panel/api/health').catch(() => []),
+    api('/panel/api/access').catch(() => ({})),
+    api('/panel/api/activity?limit=8').catch(() => []),
+  ]);
+  devices = devs || [];
+  healthByCode = {}; (health || []).forEach(h => healthByCode[h.code] = h);
+  const online = devices.filter(d => d.online).length;
+  const pend = devices.filter(d => d.state === 'Pending');
+  $('ovTotal').textContent = devices.length;
+  $('ovTotalSub').textContent = devices.filter(d => d.state === 'Approved').length + ' approved · ' + devices.filter(d => d.state === 'Rejected').length + ' rejected';
+  $('ovOnline').textContent = online;
+  $('ovOffline').textContent = (devices.length - online) + ' offline';
+  $('ovPending').textContent = pend.length;
+  $('ovHealth').textContent = (health || []).filter(h => h.overall === 'fail').length;
+  $('ovHealth').className = 'big ' + ((health || []).some(h => h.overall === 'fail') ? 'bad' : 'ok');
+  $('ovAlerts').textContent = acc.alertsLast24h ?? 0;
+  $('ovPendingWrap').style.display = pend.length ? 'block' : 'none';
+  $('ovPendingBody').innerHTML = pend.map(d => `<tr>
+    <td><code>${esc(d.code)}</code></td><td>${esc(d.name)}</td><td>${esc(d.os)}</td><td class="num">${fmtTime(d.lastSeen)}</td>
+    <td><button class="act primary" onclick="approveDev('${d.code}')">Approve</button> <button class="act danger" onclick="rejectDev('${d.code}')">Reject</button></td></tr>`).join('');
+  const evs = (recent || []).slice().reverse();
+  $('ovRecentBody').innerHTML = evs.map(e => actRow(e, true)).join('');
+  $('ovRecentEmpty').style.display = evs.length ? 'none' : 'block';
+}
+
+// ----- devices: searchable / sortable table -----
 let devices = [];
 let healthByCode = {};
+let devSort = {key: 'code', dir: 1};
 function healthBadge(code) {
   const h = healthByCode[code];
   if (!h) return '';
-  if (h.overall === 'fail') return '<br><span class="badge" style="border-color:var(--bad);color:var(--bad)">health: fail</span>';
-  if (h.overall === 'warn') return '<br><span class="badge" style="border-color:var(--warn);color:var(--warn)">health: warn</span>';
-  return '<br><span class="badge" style="border-color:var(--ok);color:var(--ok)">health: ok</span>';
+  if (h.overall === 'fail') return '<br><span class="badge bad"><span class="dot"></span>health: fail</span>';
+  if (h.overall === 'warn') return '<br><span class="badge pend"><span class="dot"></span>health: warn</span>';
+  return '<br><span class="badge on"><span class="dot"></span>health: ok</span>';
+}
+function stateBadge(d) {
+  const net = d.online ? '<span class="badge on"><span class="dot"></span>online</span>' : '<span class="badge off"><span class="dot"></span>offline</span>';
+  const st = d.state === 'Pending' ? ' <span class="badge pend">Pending</span>' : d.state === 'Rejected' ? ' <span class="badge rej">Rejected</span>' : '';
+  return net + st;
+}
+function devFiltered() {
+  const q = $('devSearch').value.trim().toLowerCase();
+  const sf = $('devStateFilter').value;
+  const gf = $('devGroupFilter').value;
+  let list = devices.filter(d => {
+    if (sf === 'online' && !d.online) return false;
+    if (sf === 'offline' && d.online) return false;
+    if ((sf === 'Pending' || sf === 'Approved' || sf === 'Rejected') && d.state !== sf) return false;
+    if (gf && !(d.groups || []).includes(gf)) return false;
+    if (q) {
+      const hay = [d.code, d.name, d.os, d.version, (d.groups || []).join(' '), (d.ips || []).join(' ')].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const k = devSort.key, dir = devSort.dir;
+  const val = d => k === 'state' ? (d.state + (d.online ? '0' : '1')) : k === 'lastSeen' ? (d.lastSeen || '') : String(d[k] || '').toLowerCase();
+  list.sort((a, b) => val(a) < val(b) ? -dir : val(a) > val(b) ? dir : 0);
+  return list;
+}
+function renderDevices() {
+  const list = devFiltered();
+  document.querySelectorAll('#tab-devices th.sortable').forEach(th => {
+    const on = th.dataset.sort === devSort.key;
+    th.innerHTML = th.textContent.replace(/\s*[▲▼]$/, '') + (on ? ` <span class="arr">${devSort.dir === 1 ? '▲' : '▼'}</span>` : '');
+  });
+  $('devBody').innerHTML = list.map(d => `<tr>
+    <td><code>${esc(d.code)}</code></td>
+    <td>${esc(d.name)}<br><button class="act" onclick="renameDev('${d.code}')">Rename</button></td>
+    <td>${esc(d.os)}<br><span class="mut">${esc(d.version)}</span></td>
+    <td>${esc((d.ips || []).join(', ') || '—')}</td>
+    <td>${stateBadge(d)}</td>
+    <td>${esc((d.groups || []).join(', '))}<br><button class="act" onclick="groupsDev('${d.code}')">Edit groups</button></td>
+    <td class="num">${fmtTime(d.lastSeen)}${healthBadge(d.code)}</td>
+    <td>${d.state === 'Approved' ? `<button class="act primary" onclick="openDevice('${d.code}')">Open</button> <button class="act" onclick="wakeDev('${d.code}')">Wake</button> ` : ''}${d.state !== 'Approved' ? `<button class="act primary" onclick="approveDev('${d.code}')">Approve</button> ` : ''}${d.state !== 'Rejected' ? `<button class="act danger" onclick="rejectDev('${d.code}')">Reject</button>` : ''}</td>
+  </tr>`).join('');
+  $('devEmpty').style.display = list.length ? 'none' : 'block';
 }
 async function loadDevices() {
   devices = await api('/panel/api/devices');
@@ -294,74 +719,74 @@ async function loadDevices() {
   } catch { healthByCode = {}; }
   try {
     const a = await api('/panel/api/access');
-    if (a.alertsLast24h > 0) { $('hdrAlerts').style.display = ''; $('hdrAlerts').textContent = '⚠ ' + a.alertsLast24h + ' alert(s) / 24h'; }
+    if (a.alertsLast24h > 0) { $('hdrAlerts').style.display = ''; $('hdrAlerts').textContent = '⚠ ' + a.alertsLast24h + ' alerts / 24h'; }
     else $('hdrAlerts').style.display = 'none';
   } catch { }
   const pend = devices.filter(d => d.state === 'Pending').length;
   $('hdrInfo').textContent = devices.length + ' devices · ' + devices.filter(d => d.online).length + ' online' + (pend ? ' · ' + pend + ' pending approval' : '');
-  $('devBody').innerHTML = devices.map(d => `<tr>
-    <td><code>${esc(d.code)}</code></td>
-    <td>${esc(d.name)}<br><button class="act" onclick="renameDev('${d.code}')">Rename</button></td>
-    <td>${esc(d.os)}<br><span class="mut">${esc(d.version)}</span></td>
-    <td>${esc((d.ips || []).join(', ') || '—')}</td>
-    <td><span class="badge ${d.online ? 'on' : ''}">${d.online ? 'online' : 'offline'}</span> <span class="badge ${d.state === 'Pending' ? 'pend' : d.state === 'Rejected' ? 'rej' : ''}">${esc(d.state)}</span></td>
-    <td>${esc((d.groups || []).join(', '))}<br><button class="act" onclick="groupsDev('${d.code}')">Edit groups</button></td>
-    <td>${esc((d.lastSeen || '').replace('T', ' ').slice(0, 19))}${healthBadge(d.code)}</td>
-    <td>${d.state === 'Approved' ? `<button class="act primary" onclick="openDevice('${d.code}')">Open</button> <button class="act" onclick="wakeDev('${d.code}')">Wake</button> ` : ''}${d.state !== 'Approved' ? `<button class="act primary" onclick="approveDev('${d.code}')">Approve</button> ` : ''}${d.state !== 'Rejected' ? `<button class="act danger" onclick="rejectDev('${d.code}')">Reject</button>` : ''}</td>
-  </tr>`).join('');
-  const sel = $('conDevice');
-  const approved = devices.filter(d => d.state === 'Approved');
-  sel.innerHTML = approved.map(d => `<option value="${d.code}">${esc(d.code)} — ${esc(d.name)}${d.online ? '' : ' (offline)'}</option>`).join('');
-  updateDirectLink();
+  const groups = [...new Set(devices.flatMap(d => d.groups || []))].sort();
+  const cur = $('devGroupFilter').value;
+  $('devGroupFilter').innerHTML = '<option value="">All groups</option>' + groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+  $('devGroupFilter').value = groups.includes(cur) ? cur : '';
+  renderDevices();
 }
-async function approveDev(code) { await api('/panel/api/devices/approve', {method: 'POST', json: {code}}); loadDevices(); }
-async function rejectDev(code) { if (!confirm('Reject ' + code + '? It will receive nothing.')) return; await api('/panel/api/devices/reject', {method: 'POST', json: {code}}); loadDevices(); }
-async function renameDev(code) { const name = prompt('New name for ' + code); if (name) { await api('/panel/api/devices/rename', {method: 'POST', json: {code, name}}); loadDevices(); } }
-async function groupsDev(code) { const g = prompt('Groups for ' + code + ' (comma-separated)'); if (g !== null) { await api('/panel/api/devices/groups', {method: 'POST', json: {code, groups: g.split(',').map(x => x.trim()).filter(Boolean)}}); loadDevices(); } }
+async function approveDev(code) { await api('/panel/api/devices/approve', {method: 'POST', json: {code}}); loadDevices(); loadOverview(); }
+async function rejectDev(code) {
+  if (!await esoConfirm('Reject device', 'Reject ' + code + '? It will receive nothing and cannot connect.', 'Reject', true)) return;
+  await api('/panel/api/devices/reject', {method: 'POST', json: {code}}); loadDevices(); loadOverview();
+}
+async function renameDev(code) {
+  const d = devices.find(x => x.code === code);
+  const name = await esoTextDialog('Rename device', 'New name for ' + code, d ? d.name : '', {required: true, okLabel: 'Rename'});
+  if (name === null) return;
+  await api('/panel/api/devices/rename', {method: 'POST', json: {code, name: name.trim()}}); loadDevices();
+}
+async function groupsDev(code) {
+  const d = devices.find(x => x.code === code);
+  const g = await esoTextDialog('Edit groups', 'Groups for ' + code + ' (comma-separated)', d ? (d.groups || []).join(', ') : '', {okLabel: 'Save groups'});
+  if (g === null) return;
+  await api('/panel/api/devices/groups', {method: 'POST', json: {code, groups: g.split(',').map(x => x.trim()).filter(Boolean)}}); loadDevices();
+}
 $('devRefresh').onclick = loadDevices;
-
-function updateDirectLink() {
-  const d = devices.find(x => x.code === $('conDevice').value);
-  $('conDirect').textContent = d && d.ips && d.ips.length ? `https://${d.ips[0]}:8737/panel/` : '— (device reports no tailnet IP)';
-}
-$('conDevice').onchange = updateDirectLink;
-
-async function panelCommand(path, body, method = 'POST') {
-  const code = $('conDevice').value;
-  if (!code) return {error: 'No approved device selected.'};
-  return api('/panel/api/command', {method: 'POST', json: {code, method, path, body}});
-}
-function showCon(r) {
-  const o = $('conOut'); o.style.display = 'block';
-  if (r.error) { o.textContent = 'Error: ' + r.error; return; }
-  const b = r.body;
-  if (b && typeof b === 'object' && 'stdout' in b) o.textContent = (b.stdout || '') + (b.stderr ? '\n[stderr]\n' + b.stderr : '') + '\n[exit ' + b.exitCode + ']';
-  else o.textContent = JSON.stringify(b, null, 2);
-}
-$('conRun').onclick = async () => {
-  $('conOut').style.display = 'block'; $('conOut').textContent = 'Running…';
-  showCon(await panelCommand('/api/shell', {shell: $('conShell').value, script: $('conScript').value, timeoutMs: 300000}));
-};
-document.querySelectorAll('[data-quick]').forEach(b => b.onclick = async () => {
-  $('conOut').style.display = 'block'; $('conOut').textContent = 'Loading…';
-  showCon(await panelCommand(b.dataset.quick, undefined, 'GET'));
+$('devSearch').oninput = renderDevices;
+$('devStateFilter').onchange = renderDevices;
+$('devGroupFilter').onchange = renderDevices;
+document.querySelectorAll('#tab-devices th.sortable').forEach(th => th.onclick = () => {
+  const k = th.dataset.sort;
+  if (devSort.key === k) devSort.dir *= -1; else devSort = {key: k, dir: 1};
+  renderDevices();
 });
 
+// ----- wake (result is a toast now, not a blocking alert) -----
+window.wakeDev = async code => {
+  const r = await api('/panel/api/wake', {method: 'POST', json: {code}});
+  if (r.error) { esoToast('Wake failed: ' + r.error, 'bad'); return; }
+  const sent = (r.results || []).filter(x => x.sent).length;
+  esoToast('Magic packet for ' + code + ': sent by ' + sent + ' sender(s) — ' + (r.macs || []).join(', '), 'ok');
+};
+
+// ----- fleet audit (table, not a text dump) -----
 async function loadAudit() {
   const r = await api('/panel/api/audit?lines=300');
-  $('auditOut').textContent = (r.lines || []).join('\n');
+  const lines = r.lines || [];
+  $('auditBody').innerHTML = lines.map(l => {
+    const m = String(l).match(/^(\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)\s+([\s\S]*)$/);
+    return m ? `<tr><td class="num mut">${esc(m[1])}</td><td>${esc(m[2])}</td></tr>` : `<tr><td></td><td>${esc(l)}</td></tr>`;
+  }).join('');
+  $('auditEmpty').style.display = lines.length ? 'none' : 'block';
 }
 $('auditRefresh').onclick = loadAudit;
 
+// ----- access -----
 async function loadAccess() {
   loadAccessCodes();
   const a = await api('/panel/api/access');
   $('accTotpState').textContent = a.totpEnabled ? 'Enabled' : 'Off';
-  $('accTotpState').style.color = a.totpEnabled ? 'var(--ok)' : 'var(--mut)';
+  $('accTotpState').style.color = a.totpEnabled ? 'var(--ok-tx)' : 'var(--mut)';
   $('accWebhookUrl').value = a.webhookUrl || '';
   $('accWebhookState').textContent = a.webhookUrl ? (a.webhookSecretSet ? 'secret set' : 'no secret') : 'not configured';
   $('accOpState').textContent = a.operatorEnabled ? 'Active' : 'REVOKED';
-  $('accOpState').style.color = a.operatorEnabled ? 'var(--ok)' : 'var(--bad)';
+  $('accOpState').style.color = a.operatorEnabled ? 'var(--ok-tx)' : 'var(--bad-tx)';
   $('accFp').textContent = a.certFingerprint;
   $('accBanner').innerHTML = a.operatorEnabled ? '' : '<div class="banner">Operator access is REVOKED. The operator cannot reach any device until you restore it.</div>';
 }
@@ -371,31 +796,39 @@ $('acCreate').onclick = async () => {
   const uses = parseInt($('acUses').value, 10);
   const r = await api('/panel/api/access/codes', {method: 'POST', json: {deviceCode: $('acDevice').value.trim(), scope, expiresMinutes: parseInt($('acMinutes').value, 10) || 60, maxUses: isNaN(uses) ? null : uses}});
   if (r.code) { $('acCreated').style.display = ''; $('acCode').textContent = r.code; loadAccessCodes(); }
-  else alert(r.error || 'Could not create the code.');
+  else esoToast(r.error || 'Could not create the code.', 'bad');
 };
 async function loadAccessCodes() {
   const r = await api('/panel/api/access/grants');
   if (!r.codes) return;
-  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   let h = '';
   if (r.codes.length) {
-    h += '<p><b>Codes</b></p>' + r.codes.map(c => `<div>${esc(c.deviceCode)} · exp ${new Date(c.expiresAt).toLocaleString()} · used ${c.uses}${c.maxUses ? '/' + c.maxUses : ''}${c.revoked ? ' · REVOKED' : ''}${c.expired ? ' · EXPIRED' : ''} ${c.revoked || c.expired ? '' : `<button class="act danger" data-revoke="${esc(c.id)}">Revoke</button>`}</div>`).join('');
+    h += '<p><b>Codes</b></p><div class="tablewrap"><table><thead><tr><th>Device</th><th>Expires</th><th>Used</th><th>State</th><th></th></tr></thead><tbody>' +
+      r.codes.map(c => `<tr><td><code>${esc(c.deviceCode)}</code></td><td class="num">${fmtTime(c.expiresAt)}</td><td>${c.uses}${c.maxUses ? '/' + c.maxUses : ''}</td>
+        <td>${c.revoked ? '<span class="badge rej">REVOKED</span>' : c.expired ? '<span class="badge">EXPIRED</span>' : '<span class="badge on"><span class="dot"></span>live</span>'}</td>
+        <td>${c.revoked || c.expired ? '' : `<button class="act danger" data-revoke="${esc(c.id)}">Revoke</button>`}</td></tr>`).join('') + '</tbody></table></div>';
   }
   if (r.grants.length) {
-    h += '<p><b>Live grants</b></p>' + r.grants.map(g => `<div>grant ${esc(g.id.slice(0, 8))}… → ${esc(g.deviceCode)} · from ${esc(g.redeemedFrom)} · ${g.actions} action(s) · exp ${new Date(g.expiresAt).toLocaleString()}${g.revoked ? ' · REVOKED' : ''}${g.active ? ` <button class="act danger" data-revoke="${esc(g.id)}">Revoke now</button>` : ''}</div>`).join('');
+    h += '<p><b>Live grants</b></p><div class="tablewrap"><table><thead><tr><th>Grant</th><th>Device</th><th>From</th><th>Actions</th><th>Expires</th><th></th></tr></thead><tbody>' +
+      r.grants.map(g => `<tr><td><code>${esc(g.id.slice(0, 8))}…</code></td><td><code>${esc(g.deviceCode)}</code></td><td>${esc(g.redeemedFrom)}</td><td>${g.actions}</td>
+        <td class="num">${fmtTime(g.expiresAt)}</td>
+        <td>${g.revoked ? '<span class="badge rej">REVOKED</span>' : g.active ? `<button class="act danger" data-revoke="${esc(g.id)}">Revoke now</button>` : ''}</td></tr>`).join('') + '</tbody></table></div>';
   }
   $('acLists').innerHTML = h || '<p class="small">No access codes yet.</p>';
   $('acLists').querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => {
-    if (!confirm('Revoke this access immediately?')) return;
+    if (!await esoConfirm('Revoke access', 'Revoke this access immediately? The holder loses the device at once.', 'Revoke', true)) return;
     await api('/panel/api/access/revoke', {method: 'POST', json: {id: b.dataset.revoke}});
     loadAccessCodes();
   });
 }
-$('accRevoke').onclick = async () => { if (!confirm('Revoke the operator everywhere?')) return; await api('/panel/api/access/revoke-operator', {method: 'POST'}); loadAccess(); };
+$('accRevoke').onclick = async () => {
+  if (!await esoConfirm('Revoke operator', 'Revoke the operator everywhere? The server refuses its calls and every approved device drops its key.', 'Revoke operator', true)) return;
+  await api('/panel/api/access/revoke-operator', {method: 'POST'}); loadAccess();
+};
 $('accRestore').onclick = async () => { await api('/panel/api/access/restore-operator', {method: 'POST'}); loadAccess(); };
 $('accRotateKey').onclick = async () => {
-  const k = $('accNewKey').value.trim(); if (!k) return;
-  if (!confirm('Rotate the operator key? The old key dies immediately.')) return;
+  const k = $('accNewKey').value.trim(); if (!k) { esoToast('Paste the new operator public key first.', 'bad'); return; }
+  if (!await esoConfirm('Rotate operator key', 'Rotate the operator key? The old key dies immediately and devices are told to trust the new one.', 'Rotate key', true)) return;
   const r = await api('/panel/api/access/rotate-operator-key', {method: 'POST', json: {newPublicKey: k}});
   $('accRotateMsg').textContent = r.rotated ? 'Rotated ✓ devices notified: ' + r.devicesNotified : ('Failed: ' + (r.error || ''));
 };
@@ -420,16 +853,31 @@ async function loadMesh() {
   $('exitSel').innerHTML = (meshState.devices || []).map(d => `<option value="${d.code}" ${d.exitNode ? 'selected' : ''}>${esc(d.code)} — ${esc(d.name)}${d.exitNode ? ' (exit node)' : ''}</option>`).join('');
   $('ekBody').innerHTML = (meshState.enrollmentKeys || []).map(k => `<tr>
     <td><code>${esc(k.id)}</code></td><td>${k.usesLeft === null ? '∞' : k.usesLeft}</td><td>${esc(k.createdBy)}</td><td>${esc(k.note)}</td>
-    <td><button class="act" onclick="revokeKey('${k.id}')">Revoke</button></td></tr>`).join('');
+    <td><button class="act danger" onclick="revokeKey('${k.id}')">Revoke</button></td></tr>`).join('');
 }
 window.approveSubnets = async code => {
   const d = (meshState.devices || []).find(x => x.code === code); if (!d) return;
-  const v = prompt('Approved subnets for ' + code + ' (comma-separated CIDRs; advertised: ' + (d.advertisedSubnets || []).join(', ') + ')', (d.approvedSubnets || []).join(', '));
-  if (v === null) return;
-  await api('/panel/api/mesh/subnets', {method: 'POST', json: {code, approved: v.split(',').map(s => s.trim()).filter(Boolean)}});
+  const advertised = d.advertisedSubnets || [];
+  const approved = d.approvedSubnets || [];
+  const extra0 = approved.filter(s => !advertised.includes(s));
+  const r = await esoDialog({
+    title: 'Approved subnets — ' + code,
+    message: 'Checked subnets are approved for routing through this device. Advertised: ' + (advertised.join(', ') || 'none') + '.',
+    fields: [
+      {id: 'subs', type: 'checks', options: advertised.map(s => ({value: s, label: s, checked: approved.includes(s)}))},
+      {id: 'extra', label: 'Additional CIDRs (comma-separated)', value: extra0.join(', ')},
+    ],
+    actions: [{id: 'no', label: 'Cancel'}, {id: 'yes', label: 'Save subnets', kind: 'primary'}],
+  });
+  if (!r || r.action !== 'yes') return;
+  const list = [...r.values.subs, ...r.values.extra.split(',').map(s => s.trim()).filter(Boolean)];
+  await api('/panel/api/mesh/subnets', {method: 'POST', json: {code, approved: [...new Set(list)]}});
   loadMesh();
 };
-window.revokeKey = async id => { if (!confirm('Revoke enrollment key ' + id + '?')) return; await api('/panel/api/mesh/enrollment-keys/revoke', {method: 'POST', json: {id}}); loadMesh(); };
+window.revokeKey = async id => {
+  if (!await esoConfirm('Revoke enrollment key', 'Revoke enrollment key ' + id + '? Devices can no longer enroll with it.', 'Revoke', true)) return;
+  await api('/panel/api/mesh/enrollment-keys/revoke', {method: 'POST', json: {id}}); loadMesh();
+};
 $('meshRefresh').onclick = loadMesh;
 $('aclSave').onclick = async () => {
   const rules = $('aclText').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
@@ -448,28 +896,21 @@ $('ekCreate').onclick = async () => {
 
 // ----- i18n (EN/AR, RTL for Arabic) -----
 const I18N = {
-  en: { fleetTitle: 'EsoAgent Fleet', signOut: 'Sign out', devices: 'Devices', console: 'Device console', activity: 'Activity', scripts: 'Scripts', mesh: 'Mesh', audit: 'Fleet audit', access: 'Access', refresh: 'Refresh', addScript: 'Add / edit script', runScript: 'Run a script', save: 'Save script', back: '← All devices', status: 'Status', desktop: 'Desktop', files: 'Files' },
-  ar: { fleetTitle: 'أسطول EsoAgent', signOut: 'تسجيل الخروج', devices: 'الأجهزة', console: 'وحدة تحكم الجهاز', activity: 'النشاط', scripts: 'البرامج النصية', mesh: 'الشبكة', audit: 'سجل الأسطول', access: 'الوصول', refresh: 'تحديث', addScript: 'إضافة / تعديل برنامج', runScript: 'تشغيل برنامج', save: 'حفظ البرنامج', back: '→ كل الأجهزة', status: 'الحالة', desktop: 'سطح المكتب', files: 'الملفات' },
+  en: { fleetTitle: 'EsoAgent Fleet', signOut: 'Sign out', overview: 'Overview', devices: 'Devices', activity: 'Activity', scripts: 'Scripts', mesh: 'Mesh', audit: 'Fleet audit', access: 'Access', refresh: 'Refresh', addScript: 'Add / edit script', runScript: 'Run a script', save: 'Save script', back: '← All devices', status: 'Status', desktop: 'Desktop', files: 'Files', searchDevices: 'Search code, name, OS, group…' },
+  ar: { fleetTitle: 'أسطول EsoAgent', signOut: 'تسجيل الخروج', overview: 'نظرة عامة', devices: 'الأجهزة', activity: 'النشاط', scripts: 'البرامج النصية', mesh: 'الشبكة', audit: 'سجل الأسطول', access: 'الوصول', refresh: 'تحديث', addScript: 'إضافة / تعديل برنامج', runScript: 'تشغيل برنامج', save: 'حفظ البرنامج', back: '→ كل الأجهزة', status: 'الحالة', desktop: 'سطح المكتب', files: 'الملفات', searchDevices: 'ابحث بالكود أو الاسم أو النظام أو المجموعة…' },
 };
 let lang = localStorage.getItem('eso-lang') || 'en';
 function applyLang() {
   const dict = I18N[lang] || I18N.en;
   document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.dataset.i18n; if (dict[k]) el.textContent = dict[k]; });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { const k = el.dataset.i18nPh; if (dict[k]) el.placeholder = dict[k]; });
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   $('langToggle').textContent = lang === 'ar' ? 'English' : 'العربية';
 }
 $('langToggle').onclick = () => { lang = lang === 'ar' ? 'en' : 'ar'; localStorage.setItem('eso-lang', lang); applyLang(); };
 
-// ----- wake -----
-window.wakeDev = async code => {
-  const r = await api('/panel/api/wake', {method: 'POST', json: {code}});
-  if (r.error) { alert('Wake failed: ' + r.error); return; }
-  const sent = (r.results || []).filter(x => x.sent).length;
-  alert('Magic packet for ' + code + ': sent by ' + sent + ' sender(s) — ' + (r.macs || []).join(', '));
-};
-
-// ----- activity tab (the unified timeline) -----
+// ----- activity tab (the unified timeline, as a table) -----
 function actQuery() {
   const q = new URLSearchParams();
   if ($('actDevice').value.trim()) q.set('device', $('actDevice').value.trim());
@@ -480,8 +921,9 @@ function actQuery() {
 }
 async function loadActivity() {
   const evs = await api('/panel/api/activity?' + actQuery().toString());
-  $('actOut').textContent = (evs || []).slice().reverse().map(e =>
-    `${(e.at || '').replace('T', ' ').slice(0, 19)}  [${e.source}]  ${e.deviceName || e.deviceCode || '—'}  ${e.kind}: ${e.summary}  (${e.result})`).join('\n') || '(no activity yet)';
+  const list = (evs || []).slice().reverse();
+  $('actBody').innerHTML = list.map(e => actRow(e, true)).join('');
+  $('actEmpty').style.display = list.length ? 'none' : 'block';
   const q = actQuery();
   $('actExportJson').href = '/panel/api/activity/export?' + q.toString();
   q.set('format', 'csv');
@@ -496,7 +938,7 @@ async function loadScripts() {
   $('scBody2').innerHTML = scripts.map(x => `<tr>
     <td>${esc(x.name)}<br><span class="mut">${esc(x.description || '')}</span></td>
     <td>${esc(x.shell)}</td><td>${esc(x.createdBy)}</td>
-    <td>${esc((x.updatedAt || '').replace('T', ' ').slice(0, 19))}</td>
+    <td class="num">${fmtTime(x.updatedAt)}</td>
     <td><button class="act" onclick="editScript('${x.id}')">Edit</button> <button class="act danger" onclick="delScript('${x.id}')">Delete</button></td></tr>`).join('');
   $('scPick').innerHTML = scripts.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
 }
@@ -505,7 +947,10 @@ window.editScript = id => {
   $('scName').value = x.name; $('scShell').value = x.shell; $('scBody').value = x.body;
   window.scrollTo({top: 0, behavior: 'smooth'});
 };
-window.delScript = async id => { if (!confirm('Delete this script?')) return; await api('/panel/api/scripts/' + id, {method: 'DELETE'}); loadScripts(); };
+window.delScript = async id => {
+  if (!await esoConfirm('Delete script', 'Delete this script from the library?', 'Delete', true)) return;
+  await api('/panel/api/scripts/' + id, {method: 'DELETE'}); loadScripts();
+};
 $('scSave').onclick = async () => {
   const existing = scripts.find(x => x.name === $('scName').value.trim());
   const r = await api('/panel/api/scripts', {method: 'POST', json: {id: existing ? existing.id : '', name: $('scName').value.trim(), shell: $('scShell').value, body: $('scBody').value, description: existing ? existing.description : ''}});
@@ -515,15 +960,23 @@ $('scSave').onclick = async () => {
 $('scRun').onclick = async () => {
   const id = $('scPick').value; if (!id) return;
   const targets = $('scTargets').value.split(',').map(x => x.trim()).filter(Boolean);
-  if (!targets.length) { alert('Enter at least one device code.'); return; }
-  $('scOut').style.display = 'block'; $('scOut').textContent = 'Running…';
+  if (!targets.length) { esoToast('Enter at least one device code.', 'bad'); return; }
+  const out = $('scOut'); out.style.display = 'block'; out.innerHTML = '<p class="mut">Running…</p>';
   const r = await api('/panel/api/scripts/' + id + '/run', {method: 'POST', json: {targets}});
-  if (r.error) { $('scOut').textContent = 'Error: ' + r.error; return; }
-  $('scOut').textContent = (r.results || []).map(x => {
+  out.innerHTML = '';
+  if (r.error) { out.appendChild(esoEl('div', 'banner', 'Error: ' + r.error)); return; }
+  (r.results || []).forEach(x => {
+    const card = esoEl('div', 'card');
+    card.style.marginBottom = 'var(--sp-2)';
+    const head = esoEl('div', '', `${x.code} — ${x.ok ? 'OK' : 'FAILED ' + (x.error || '')}`);
+    head.style.fontWeight = '700'; head.style.marginBottom = 'var(--sp-2)';
+    card.appendChild(head);
     const b = x.body;
     const text = b && typeof b === 'object' && 'stdout' in b ? (b.stdout || '') + (b.stderr ? '\n[stderr]\n' + b.stderr : '') + '\n[exit ' + b.exitCode + ']' : JSON.stringify(b);
-    return `== ${x.code} — ${x.ok ? 'OK' : 'FAILED ' + (x.error || '')}\n${text}`;
-  }).join('\n\n');
+    const box = esoEl('div', 'outbox', text);
+    card.appendChild(box);
+    out.appendChild(card);
+  });
 };
 
 // ----- 2FA + webhook -----
@@ -584,10 +1037,12 @@ $('dvBack').onclick = () => {
   history.replaceState(null, '', location.pathname);
   document.querySelector('[data-tab="devices"]').click();
 };
+$('dvDesktopCta').onclick = () => dvShowSub('desktop');
 function dvShowSub(name) {
   document.querySelectorAll('.dv-sub').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
   ['status', 'desktop', 'files', 'activity'].forEach(n => $('dv-' + n).style.display = n === name ? 'block' : 'none');
   if (name === 'activity') loadDvActivity();
+  if (name === 'desktop' && !fdWs) fdStartSession();
 }
 document.querySelectorAll('.dv-sub').forEach(b => b.onclick = () => dvShowSub(b.dataset.sub));
 
@@ -595,20 +1050,28 @@ async function devCommand(method, path, body, bodyBase64) {
   if (!dvCode) return {error: 'No device open.'};
   return api('/panel/api/command', {method: 'POST', json: {code: dvCode, method, path, body, bodyBase64}});
 }
-function dvShow(r, out) {
-  const o = $(out); o.style.display = 'block';
-  if (r.error) { o.textContent = 'Error: ' + r.error; return; }
+function dvRender(outId, r) {
+  const o = $(outId);
+  o.innerHTML = '';
+  if (r.error) { o.appendChild(esoEl('div', 'banner', 'Error: ' + r.error)); return; }
   const b = r.body;
-  if (b && typeof b === 'object' && 'stdout' in b) o.textContent = (b.stdout || '') + (b.stderr ? '\n[stderr]\n' + b.stderr : '') + '\n[exit ' + b.exitCode + ']';
-  else o.textContent = JSON.stringify(b, null, 2);
+  if (b && typeof b === 'object' && 'stdout' in b) {
+    const box = esoEl('div', 'outbox', (b.stdout || '') + (b.stderr ? '\n[stderr]\n' + b.stderr : '') + '\n[exit ' + b.exitCode + ']');
+    o.appendChild(box);
+  } else if (b && typeof b === 'object') {
+    o.innerHTML = kvTable(b);
+  } else {
+    o.appendChild(esoEl('div', 'outbox', String(b ?? '')));
+  }
 }
-async function dvQuick(path) { $('dvStatusOut').textContent = 'Loading…'; dvShow(await devCommand('GET', path), 'dvStatusOut'); }
+async function dvQuick(path) { $('dvStatusOut').innerHTML = '<p class="mut">Loading…</p>'; dvRender('dvStatusOut', await devCommand('GET', path)); }
 document.querySelectorAll('[data-dvquick]').forEach(b => b.onclick = () => dvQuick(b.dataset.dvquick));
 
 async function loadDvActivity() {
   const evs = await api('/panel/api/activity?device=' + encodeURIComponent(dvCode) + '&limit=200');
-  $('dvActOut').textContent = (evs || []).slice().reverse().map(e =>
-    `${(e.at || '').replace('T', ' ').slice(0, 19)}  [${e.source}]  ${e.kind}: ${e.summary}  (${e.result})`).join('\n') || '(no activity yet)';
+  const list = (evs || []).slice().reverse();
+  $('dvActBody').innerHTML = list.map(e => actRow(e, false)).join('');
+  $('dvActEmpty').style.display = list.length ? 'none' : 'block';
 }
 $('dvActRefresh').onclick = loadDvActivity;
 
@@ -621,26 +1084,27 @@ async function loadDvFiles(path) {
   $('dvFileMsg').textContent = list.entries.length + ' item(s)';
   $('dvFileBody').innerHTML = list.entries.map(e => `<tr>
     <td>${e.isDir ? `<a href="#" onclick="dvOpenDir('${encodeURIComponent(e.path)}');return false">${esc(e.name)}/</a>` : esc(e.name)}</td>
-    <td>${e.isDir ? '' : e.size}</td>
+    <td class="num">${e.isDir ? '' : fmtBytes(e.size)}</td>
     <td>${e.isDir ? '' : `<button class="act" onclick="dvDownload('${encodeURIComponent(e.path)}','${esc(e.name)}')">Download</button> `}
-        <button class="act" onclick="dvRename('${encodeURIComponent(e.path)}')">Rename</button>
-        <button class="act danger" onclick="dvDelete('${encodeURIComponent(e.path)}')">Delete</button></td></tr>`).join('');
+        <button class="act" onclick="dvRename('${encodeURIComponent(e.path)}','${esc(e.name)}')">Rename</button>
+        <button class="act danger" onclick="dvDelete('${encodeURIComponent(e.path)}','${esc(e.name)}')">Delete</button></td></tr>`).join('');
 }
 window.dvOpenDir = enc => loadDvFiles(decodeURIComponent(enc));
 $('dvFileGo').onclick = () => loadDvFiles($('dvFilePath').value);
 $('dvFileUp').onclick = () => { if (dvParent) loadDvFiles(dvParent); };
-window.dvDelete = async enc => {
-  if (!confirm('Delete this item on the device?')) return;
+window.dvDelete = async (enc, name) => {
+  if (!await esoConfirm('Delete file', 'Delete "' + name + '" on the device? This cannot be undone.', 'Delete', true)) return;
   const r = await devCommand('POST', '/api/files/delete', {path: decodeURIComponent(enc)});
   $('dvFileMsg').textContent = r.error ? 'Delete failed: ' + r.error : 'Deleted ✓';
   loadDvFiles($('dvFilePath').value);
 };
-window.dvRename = async enc => {
-  const name = prompt('New name:'); if (!name) return;
+window.dvRename = async (enc, oldName) => {
+  const name = await esoTextDialog('Rename', 'New name', oldName, {required: true, okLabel: 'Rename'});
+  if (name === null) return;
   const from = decodeURIComponent(enc);
   const dir = from.replace(/[\\/][^\\/]*$/, '');
   const sep = from.includes('\\') ? '\\' : '/';
-  const r = await devCommand('POST', '/api/files/rename', {path: from, newPath: dir + sep + name});
+  const r = await devCommand('POST', '/api/files/rename', {path: from, newPath: dir + sep + name.trim()});
   $('dvFileMsg').textContent = r.error ? 'Rename failed: ' + r.error : 'Renamed ✓';
   loadDvFiles($('dvFilePath').value);
 };
@@ -657,13 +1121,13 @@ window.dvDownload = async (enc, name) => {
     if (!resp.ok) { $('dvFileMsg').textContent = 'Download failed at ' + offset; return; }
     const buf = await resp.arrayBuffer();
     parts.push(buf); offset += buf.byteLength;
-    $('dvFileMsg').textContent = `Downloading… ${offset}/${size}`;
+    $('dvFileMsg').textContent = `Downloading… ${fmtBytes(offset)} / ${fmtBytes(size)}`;
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(parts));
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  $('dvFileMsg').textContent = 'Downloaded ' + size + ' bytes ✓';
+  $('dvFileMsg').textContent = 'Downloaded ' + fmtBytes(size) + ' ✓';
 };
 $('dvFileUpload').onchange = async ev => {
   const file = ev.target.files[0]; ev.target.value = '';
@@ -685,7 +1149,7 @@ $('dvFileUpload').onchange = async ev => {
     r = await devCommand('PUT', '/api/files/chunk?path=' + encodeURIComponent(remote) + '&offset=' + offset, undefined, b64(part));
     if (r.error || !r.body) { $('dvFileMsg').textContent = 'Upload failed at ' + offset + ': ' + (r.error || ''); return; }
     offset = r.body.received;
-    $('dvFileMsg').textContent = `Uploading… ${offset}/${bytes.length}`;
+    $('dvFileMsg').textContent = `Uploading… ${fmtBytes(offset)} / ${fmtBytes(bytes.length)}`;
   }
   r = await devCommand('POST', '/api/files/commit', {path: remote, sha256: sha});
   $('dvFileMsg').textContent = r.error ? 'Commit failed: ' + r.error : 'Uploaded ✓ SHA-256 verified by the device';
@@ -696,6 +1160,14 @@ $('dvFileUpload').onchange = async ev => {
 let fdWs = null, fdCodec = 'jpeg', fdOff = null, fdOffCtx = null, fdPrivacy = false;
 const fdCanvas = $('fdCanvas'), fdCtx = fdCanvas.getContext('2d');
 function fdSend(obj) { if (fdWs && fdWs.readyState === 1) fdWs.send(JSON.stringify(obj)); }
+function fdChatAdd(who, text, mine) {
+  const log = $('fdChatLog'); log.style.display = 'flex';
+  const m = esoEl('div', 'msg' + (mine ? ' me' : ''));
+  m.appendChild(esoEl('span', 'who', who));
+  m.appendChild(document.createTextNode(text));
+  log.appendChild(m);
+  log.scrollTop = log.scrollHeight;
+}
 async function fdDrawRawDiff(b64) {
   const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   const dv = new DataView(bytes.buffer);
@@ -720,8 +1192,8 @@ async function fdDrawRawDiff(b64) {
   if (fdCanvas.width !== w) { fdCanvas.width = w; fdCanvas.height = h; }
   fdCtx.drawImage(fdOff, 0, 0);
 }
-$('fdStart').onclick = () => {
-  if (!dvCode) return;
+function fdStartSession() {
+  if (!dvCode || fdWs) return;
   fdWs = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/panel/desktop-relay?code=' + encodeURIComponent(dvCode));
   fdWs.onopen = () => fdSend({type: 'hello', mode: $('fdMode').value, codecs: ['jpeg', 'rawdiff'], monitor: parseInt($('fdMonitor').value || '0'), quality: parseInt($('fdQuality').value), maxFps: 12, record: $('fdRecord').checked});
   fdWs.onmessage = async ev => {
@@ -743,8 +1215,7 @@ $('fdStart').onclick = () => {
     } else if (msg.type === 'clipboard') {
       try { await navigator.clipboard.writeText(msg.text); } catch {}
     } else if (msg.type === 'chat') {
-      const log = $('fdChatLog'); log.style.display = 'block';
-      log.textContent += 'device: ' + msg.text + '\n';
+      fdChatAdd('device', msg.text, false);
     } else if (msg.type === 'privacy') {
       fdPrivacy = !!msg.enabled;
       $('fdPrivacy').textContent = fdPrivacy ? 'Privacy: ON' : 'Privacy: off';
@@ -753,15 +1224,15 @@ $('fdStart').onclick = () => {
       $('fdStart').disabled = false; $('fdStop').disabled = true; $('fdPrivacy').disabled = true; $('fdChatSend').disabled = true;
     }
   };
-  fdWs.onclose = () => { $('fdStart').disabled = false; $('fdStop').disabled = true; $('fdPrivacy').disabled = true; $('fdChatSend').disabled = true; };
-};
+  fdWs.onclose = () => { fdWs = null; $('fdStart').disabled = false; $('fdStop').disabled = true; $('fdPrivacy').disabled = true; $('fdChatSend').disabled = true; };
+}
+$('fdStart').onclick = fdStartSession;
 $('fdStop').onclick = () => { fdSend({type: 'close'}); if (fdWs) fdWs.close(); };
 $('fdPrivacy').onclick = () => fdSend({type: 'privacy', enabled: !fdPrivacy});
 $('fdChatSend').onclick = () => {
   const text = $('fdChatIn').value.trim(); if (!text) return;
   $('fdChatIn').value = '';
-  const log = $('fdChatLog'); log.style.display = 'block';
-  log.textContent += 'you: ' + text + '\n';
+  fdChatAdd('you', text, true);
   fdSend({type: 'chat', text, from: 'owner'});
 };
 function fdPos(ev) { const r = fdCanvas.getBoundingClientRect(); return {x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height}; }
@@ -779,6 +1250,7 @@ fdCanvas.addEventListener('keyup', ev => { ev.preventDefault(); fdSend({type: 'i
   CSRF = s.csrf;
   applyLang();
   await loadDevices();
+  loadOverview();
   const deep = new URLSearchParams(location.search).get('device');
   if (deep && devices.some(d => d.code === deep)) openDevice(deep);
 })();

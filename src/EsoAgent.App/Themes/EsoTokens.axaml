@@ -1,0 +1,71 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- EsoAgent design tokens for the desktop App — mirrors
+       src/EsoAgent.Web/tokens.css (the single design source). The App ships
+       the refined-dark variant by brand (gold wing on matte black); the Light
+       theme dictionary carries the same tokens as the web panels so a future
+       phase can follow the OS with one switch. Phase 0: tokens only, no
+       screen consumes them yet. -->
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Dark">
+      <Color x:Key="EsoBgColor">#131519</Color>
+      <Color x:Key="EsoSurfaceColor">#1B1E24</Color>
+      <Color x:Key="EsoSurface2Color">#21252D</Color>
+      <Color x:Key="EsoLineColor">#2C3038</Color>
+      <Color x:Key="EsoTextColor">#ECEEF2</Color>
+      <Color x:Key="EsoMutedColor">#9BA1AC</Color>
+      <Color x:Key="EsoAccentColor">#E3B341</Color>
+      <Color x:Key="EsoAccentTextColor">#E3B341</Color>
+      <Color x:Key="EsoOnAccentColor">#1A1A1A</Color>
+      <Color x:Key="EsoOkColor">#3FB950</Color>
+      <Color x:Key="EsoOkTextColor">#4CC38A</Color>
+      <Color x:Key="EsoWarnColor">#D29922</Color>
+      <Color x:Key="EsoWarnTextColor">#E3B341</Color>
+      <Color x:Key="EsoBadColor">#F87171</Color>
+      <Color x:Key="EsoBadTextColor">#F08A8A</Color>
+      <SolidColorBrush x:Key="EsoBgBrush" Color="{StaticResource EsoBgColor}" />
+      <SolidColorBrush x:Key="EsoSurfaceBrush" Color="{StaticResource EsoSurfaceColor}" />
+      <SolidColorBrush x:Key="EsoSurface2Brush" Color="{StaticResource EsoSurface2Color}" />
+      <SolidColorBrush x:Key="EsoLineBrush" Color="{StaticResource EsoLineColor}" />
+      <SolidColorBrush x:Key="EsoTextBrush" Color="{StaticResource EsoTextColor}" />
+      <SolidColorBrush x:Key="EsoMutedBrush" Color="{StaticResource EsoMutedColor}" />
+      <SolidColorBrush x:Key="EsoAccentBrush" Color="{StaticResource EsoAccentColor}" />
+      <SolidColorBrush x:Key="EsoOnAccentBrush" Color="{StaticResource EsoOnAccentColor}" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Light">
+      <Color x:Key="EsoBgColor">#F7F5F1</Color>
+      <Color x:Key="EsoSurfaceColor">#FFFFFF</Color>
+      <Color x:Key="EsoSurface2Color">#FBFAF7</Color>
+      <Color x:Key="EsoLineColor">#E6E1D6</Color>
+      <Color x:Key="EsoTextColor">#20242E</Color>
+      <Color x:Key="EsoMutedColor">#646B76</Color>
+      <Color x:Key="EsoAccentColor">#E3B341</Color>
+      <Color x:Key="EsoAccentTextColor">#8A6508</Color>
+      <Color x:Key="EsoOnAccentColor">#1A1A1A</Color>
+      <Color x:Key="EsoOkColor">#2F9E44</Color>
+      <Color x:Key="EsoOkTextColor">#1E7A34</Color>
+      <Color x:Key="EsoWarnColor">#E08A00</Color>
+      <Color x:Key="EsoWarnTextColor">#8F5E00</Color>
+      <Color x:Key="EsoBadColor">#D64545</Color>
+      <Color x:Key="EsoBadTextColor">#B02A2A</Color>
+      <SolidColorBrush x:Key="EsoBgBrush" Color="{StaticResource EsoBgColor}" />
+      <SolidColorBrush x:Key="EsoSurfaceBrush" Color="{StaticResource EsoSurfaceColor}" />
+      <SolidColorBrush x:Key="EsoSurface2Brush" Color="{StaticResource EsoSurface2Color}" />
+      <SolidColorBrush x:Key="EsoLineBrush" Color="{StaticResource EsoLineColor}" />
+      <SolidColorBrush x:Key="EsoTextBrush" Color="{StaticResource EsoTextColor}" />
+      <SolidColorBrush x:Key="EsoMutedBrush" Color="{StaticResource EsoMutedColor}" />
+      <SolidColorBrush x:Key="EsoAccentBrush" Color="{StaticResource EsoAccentColor}" />
+      <SolidColorBrush x:Key="EsoOnAccentBrush" Color="{StaticResource EsoOnAccentColor}" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+  <!-- spacing (4-pt scale) and radii, shared by both themes -->
+  <x:Double x:Key="EsoSp1">4</x:Double>
+  <x:Double x:Key="EsoSp2">8</x:Double>
+  <x:Double x:Key="EsoSp3">12</x:Double>
+  <x:Double x:Key="EsoSp4">16</x:Double>
+  <x:Double x:Key="EsoSp5">24</x:Double>
+  <x:Double x:Key="EsoSp6">32</x:Double>
+  <CornerRadius x:Key="EsoRadiusControl">8</CornerRadius>
+  <CornerRadius x:Key="EsoRadiusCard">12</CornerRadius>
+  <x:Double x:Key="EsoRowHeight">44</x:Double>
+</ResourceDictionary>

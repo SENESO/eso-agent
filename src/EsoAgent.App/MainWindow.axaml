@@ -4,7 +4,7 @@
         xmlns:app="using:EsoAgent.App"
         x:Class="EsoAgent.App.MainWindow"
         Title="EsoAgent — your machines, under your control" Width="1240" Height="780"
-        Icon="avares://EsoAgent.App/Assets/app-icon.png">
+        Icon="avares://EsoAgent.App/Assets/app.ico">
     <DockPanel>
         <Border DockPanel.Dock="Top" Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
             <DockPanel>

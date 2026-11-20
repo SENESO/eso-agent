@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>EsoAgent.Client</RootNamespace>
     <AssemblyName>eso-client</AssemblyName>
+    <ApplicationIcon>..\..\assets\brand\app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\EsoAgent.Core\EsoAgent.Core.csproj" />

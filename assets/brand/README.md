@@ -14,6 +14,10 @@ only — it is NEVER shipped as a product asset).
   `app-icon-{sizes}.png` + `app-icon.png`, `logo-lockup-{dark,light}.png`,
   tray set `tray-{online,offline,controlled,locked}.ico` (+ `-48.png`
   previews) and `tray-controlled-pulse.ico`.
+- `app.ico` — THE application icon (tile form, 16/20/24/32/48/64/128/256,
+  PNG entries): embedded into every exe via `<ApplicationIcon>`, copied
+  to `src/EsoAgent.App/Assets/` for the Avalonia window icon, and shipped
+  by the Windows installer as `{app}\app.ico` for the shortcuts.
 
 ## Tray state treatments (same geometry, colour only)
 

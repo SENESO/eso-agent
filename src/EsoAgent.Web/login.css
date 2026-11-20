@@ -1,0 +1,21 @@
+/* EsoAgent login pages — light theme on the shared tokens. The form markup is
+   injected by the server (Panel.cs / Dashboard.cs) as bare label/input/button
+   elements inside .card, so this sheet styles elements, not classes.
+   Synced into FleetLogin.html and DashboardLogin.html by
+   scripts/sync-web-assets.py; edit here, never in the HTML copies. */
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: var(--sp-4); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); padding: var(--sp-6); width: min(94vw, 380px); }
+h1 { font-size: var(--fs-5); margin: 0 0 var(--sp-1); text-align: center; }
+p.sub { color: var(--mut); margin: 0 0 var(--sp-5); font-size: var(--fs-2); text-align: center; }
+label { display: block; font-size: var(--fs-2); font-weight: 600; margin-bottom: var(--sp-1); color: var(--mut); }
+input { width: 100%; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--surface); color: var(--txt); margin-bottom: var(--sp-4); font: inherit; }
+button { width: 100%; padding: var(--sp-3); border: 1px solid var(--acc-solid); border-radius: var(--r-ctl); background: var(--acc-solid); color: var(--on-acc); font-weight: 700; cursor: pointer; font: inherit; }
+button:hover { filter: brightness(1.04); }
+.error { background: var(--bad-bg); border: 1px solid var(--bad); color: var(--bad-tx); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-ctl); margin-bottom: var(--sp-4); font-size: var(--fs-2); font-weight: 600; }
+.langrow { text-align: right; margin-bottom: var(--sp-2); }
+.langrow button { width: auto; padding: var(--sp-1) var(--sp-3); background: var(--surface); border: 1px solid var(--line); color: var(--txt); font-weight: 400; }
+.brandwrap { display: flex; justify-content: center; margin-bottom: var(--sp-2); }
+.brandmark { display: inline-flex; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(32, 36, 46, .18); }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+button, input { transition: border-color .15s ease, background .15s ease; }

@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 
 namespace EsoAgent.App;
 
@@ -19,6 +20,10 @@ public sealed class App : Application
             var window = new MainWindow();
             desktop.MainWindow = window;
             AppTray.Initialize(desktop, window);
+            // Later launches (which exit immediately) ask us to surface:
+            // bring the one window forward instead of starting a copy.
+            SingleInstance.StartShowListener(
+                () => Dispatcher.UIThread.Post(AppTray.ShowWindow));
         }
         base.OnFrameworkInitializationCompleted();
     }

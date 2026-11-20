@@ -6,43 +6,207 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EsoAgent — Owner Panel</title>
 <style>
-  :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3; --mut:#8b949e; --acc:#E3B341; --bad:#f85149; --ok:#3fb950; }
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); margin: 0; }
-  header { display:flex; align-items:center; gap:1rem; padding:.7rem 1rem; background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
-  header h1 { font-size:1.05rem; margin:0; }
-  header .state { font-size:.85rem; color:var(--mut); }
-  header form { margin-left:auto; }
-  nav { display:flex; flex-wrap:wrap; gap:.4rem; padding:.6rem 1rem; border-bottom:1px solid var(--line); }
-  nav button { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:.45rem .8rem; cursor:pointer; }
-  nav button.active { border-color:var(--acc); color:var(--acc); }
-  main { padding:1rem; max-width:1100px; margin:0 auto; }
-  section { display:none; }
-  section.active { display:block; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.8rem; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem; }
-  .card h3 { margin:.1rem 0 .5rem; font-size:.85rem; color:var(--mut); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
-  .card .big { font-size:1.3rem; font-weight:700; }
-  .card .small { color:var(--mut); font-size:.85rem; }
-  table { width:100%; border-collapse:collapse; font-size:.9rem; }
-  th, td { text-align:left; padding:.45rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { color:var(--mut); font-weight:600; }
-  button.act { background:#21262d; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:.3rem .6rem; cursor:pointer; }
-  button.act:hover { border-color:var(--acc); }
-  button.danger:hover { border-color:var(--bad); color:var(--bad); }
-  button.primary { background:#E3B341; border-color:#E3B341; color:#141414; font-weight:600; }
-  input, select, textarea { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:.5rem; font:inherit; }
-  textarea { width:100%; min-height:110px; font-family:ui-monospace, monospace; }
-  pre.out { background:#010409; border:1px solid var(--line); border-radius:8px; padding:.8rem; white-space:pre-wrap; word-break:break-word; max-height:50vh; overflow:auto; font-size:.85rem; }
-  .row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:.7rem; }
-  .mut { color:var(--mut); } .ok { color:var(--ok); } .bad { color:var(--bad); }
-  .banner { border:1px solid var(--bad); background:#3d1d1d; border-radius:8px; padding:.7rem .9rem; margin-bottom:.8rem; }
-  .banner.off { border-color:var(--ok); background:#12261a; }
-  code { font-family:ui-monospace, monospace; word-break:break-all; }
-  :focus-visible { outline:2px solid var(--acc); outline-offset:1px; }
-  button, input, select, textarea { transition:border-color .15s ease, background .15s ease; }
-  .brandmark { display:inline-flex; border-radius:8px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.45); }
-  header h1 { letter-spacing:.01em; }
+  /* ESO:TOKENS */
+/* EsoAgent design tokens — the single source for every surface.
+   Web panels consume the light theme (:root). The dark variant below is the
+   refined-dark token set the desktop App's resource dictionary mirrors
+   (src/EsoAgent.App/Themes/EsoTokens.axaml). Gold is an accent only:
+   primary actions, active states, the wing mark — never a theme.
+   Contrast gate: every text/background pair >= 4.5:1, verified by
+   scripts/check-contrast.py. Semantic colours pair a fill value (dots,
+   borders) with a -tx value darkened/lightened until it passes as text. */
+:root {
+  /* surfaces & text (light — the website law: soft, comfortable, light) */
+  --bg: #F7F5F1;
+  --surface: #FFFFFF;
+  --surface-2: #FBFAF7;
+  --line: #E6E1D6;
+  --txt: #20242E;
+  --mut: #646B76;
+  /* brand accent */
+  --acc: #8A6508;
+  --acc-solid: #E3B341;
+  --on-acc: #1A1A1A;
+  --acc-bg: #FAF1DA;
+  /* state semantics: fill / text-safe / tint */
+  --ok: #2F9E44;
+  --ok-tx: #1E7A34;
+  --ok-bg: #E7F5EC;
+  --warn: #E08A00;
+  --warn-tx: #8F5E00;
+  --warn-bg: #FBF0DC;
+  --bad: #D64545;
+  --bad-tx: #B02A2A;
+  --bad-bg: #FBEAEA;
+  --bad-bg-strong: #F9DADA;
+  --mut-bg: #F0EEE8;
+  /* type scale (system UI stack on both platforms) */
+  --fs-1: 12px;
+  --fs-2: 13px;
+  --fs-3: 14px;
+  --fs-4: 16px;
+  --fs-5: 20px;
+  --fs-6: 24px;
+  /* spacing: 4-pt scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  /* radii: 8 controls, 12 cards, 999 badges */
+  --r-ctl: 8px;
+  --r-card: 12px;
+  --r-badge: 999px;
+  /* elevation: one soft shadow level, dialogs/menus only */
+  --shadow: 0 8px 30px rgba(32, 36, 46, .16), 0 2px 6px rgba(32, 36, 46, .10);
+  --row-h: 36px;
+}
+[data-theme="dark"] {
+  /* refined dark — same tokens, App variant */
+  --bg: #131519;
+  --surface: #1B1E24;
+  --surface-2: #21252D;
+  --line: #2C3038;
+  --txt: #ECEEF2;
+  --mut: #9BA1AC;
+  --acc: #E3B341;
+  --acc-solid: #E3B341;
+  --on-acc: #1A1A1A;
+  --acc-bg: #33290F;
+  --ok: #3FB950;
+  --ok-tx: #4CC38A;
+  --ok-bg: #14301F;
+  --warn: #D29922;
+  --warn-tx: #E3B341;
+  --warn-bg: #38300F;
+  --bad: #F87171;
+  --bad-tx: #F08A8A;
+  --bad-bg: #3A1F22;
+  --bad-bg-strong: #4A262B;
+  --mut-bg: #262A31;
+  --shadow: 0 8px 30px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .4);
+}
+  /* /ESO:TOKENS */
+  /* ESO:COMPONENTS */
+/* EsoAgent shared components — built only on tokens.css variables.
+   Synced verbatim into Fleet.html and Dashboard.html by
+   scripts/sync-web-assets.py; edit here, never in the HTML copies. */
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); margin: 0; font-size: var(--fs-3); }
+header { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: var(--fs-4); margin: 0; letter-spacing: .01em; }
+header form { margin-left: auto; }
+.brandmark { display: inline-flex; border-radius: var(--r-ctl); overflow: hidden; box-shadow: 0 1px 4px rgba(32, 36, 46, .18); flex: none; }
+nav { display: flex; flex-wrap: wrap; gap: var(--sp-1); padding: var(--sp-2) var(--sp-4); background: var(--surface-2); border-bottom: 1px solid var(--line); }
+nav button { background: transparent; color: var(--mut); border: 1px solid transparent; border-radius: var(--r-ctl); padding: var(--sp-2) var(--sp-3); cursor: pointer; font: inherit; font-weight: 600; }
+nav button:hover { color: var(--txt); background: var(--surface); border-color: var(--line); }
+nav button.active { background: var(--surface); color: var(--acc); border-color: var(--line); box-shadow: inset 0 -2px 0 var(--acc-solid); }
+main { padding: var(--sp-4); max-width: 1150px; margin: 0 auto; }
+section { display: none; }
+section.active { display: block; }
+h2.sect { font-size: var(--fs-5); margin: var(--sp-2) 0 var(--sp-3); }
+.row { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-bottom: var(--sp-3); }
+.mut { color: var(--mut); }
+.ok { color: var(--ok-tx); }
+.bad { color: var(--bad-tx); }
+.warn { color: var(--warn-tx); }
+.small { color: var(--mut); font-size: var(--fs-2); }
+code { font-family: ui-monospace, monospace; word-break: break-all; font-size: .92em; }
+a { color: var(--acc); }
+
+/* buttons */
+button.act, a.act { background: var(--surface); color: var(--txt); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-1) var(--sp-3); cursor: pointer; font: inherit; font-size: var(--fs-2); display: inline-block; text-decoration: none; line-height: 1.55; }
+button.act:hover, a.act:hover { border-color: var(--acc); }
+button.act:disabled { opacity: .5; cursor: default; }
+button.act:disabled:hover { border-color: var(--line); }
+button.danger { color: var(--bad-tx); }
+button.danger:hover { border-color: var(--bad); background: var(--bad-bg); }
+button.primary { background: var(--acc-solid); border-color: var(--acc-solid); color: var(--on-acc); font-weight: 700; }
+button.primary:hover { border-color: var(--acc); filter: brightness(1.04); }
+
+/* inputs */
+input, select, textarea { background: var(--surface); color: var(--txt); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-2); font: inherit; font-size: var(--fs-3); }
+input::placeholder, textarea::placeholder { color: var(--mut); }
+textarea { width: 100%; min-height: 80px; font-family: ui-monospace, monospace; }
+label.chk { display: inline-flex; gap: var(--sp-1); align-items: center; font-size: var(--fs-2); color: var(--mut); }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); background: var(--surface); }
+th, td { text-align: left; padding: var(--sp-2); border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { color: var(--mut); font-weight: 600; font-size: var(--fs-1); text-transform: uppercase; letter-spacing: .04em; background: var(--surface-2); }
+tbody tr:hover { background: var(--surface-2); }
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--txt); }
+th.sortable .arr { color: var(--acc); font-size: 10px; }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tablewrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); overflow: auto; }
+.tablewrap table { background: transparent; }
+.tablewrap tbody tr:last-child td { border-bottom: 0; }
+
+/* badges: colour + label, never colour alone */
+.badge { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--mut-bg); color: var(--mut); border-radius: var(--r-badge); padding: 1px var(--sp-2); font-size: var(--fs-1); font-weight: 600; white-space: nowrap; }
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mut); flex: none; }
+.badge.on { border-color: var(--ok); background: var(--ok-bg); color: var(--ok-tx); }
+.badge.on .dot { background: var(--ok); }
+.badge.off { border-color: var(--line); background: var(--mut-bg); color: var(--mut); }
+.badge.pend { border-color: var(--warn); background: var(--warn-bg); color: var(--warn-tx); }
+.badge.pend .dot { background: var(--warn); }
+.badge.rej, .badge.bad { border-color: var(--bad); background: var(--bad-bg); color: var(--bad-tx); }
+.badge.rej .dot, .badge.bad .dot { background: var(--bad); }
+.badge.acc { border-color: var(--acc-solid); background: var(--acc-bg); color: var(--acc); }
+
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-3); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--sp-4); }
+.card h3 { margin: var(--sp-1) 0 var(--sp-2); font-size: var(--fs-1); color: var(--mut); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.card .big { font-size: var(--fs-5); font-weight: 700; }
+.card .small { color: var(--mut); font-size: var(--fs-2); }
+.stat .big { font-size: var(--fs-6); }
+.meter { height: 6px; border-radius: 3px; background: var(--mut-bg); overflow: hidden; margin-top: var(--sp-2); }
+.meter > div { height: 100%; background: var(--acc-solid); border-radius: 3px; }
+
+/* banners, empty states, output */
+.banner { border: 1px solid var(--bad); background: var(--bad-bg); color: var(--bad-tx); border-radius: var(--r-ctl); padding: var(--sp-3); margin-bottom: var(--sp-3); font-weight: 600; }
+.banner.off { border-color: var(--ok); background: var(--ok-bg); color: var(--ok-tx); }
+.empty { border: 1px dashed var(--line); border-radius: var(--r-card); padding: var(--sp-5); text-align: center; color: var(--mut); background: var(--surface-2); }
+.outbox { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-3); white-space: pre-wrap; word-break: break-word; max-height: 55vh; overflow: auto; font-size: var(--fs-2); font-family: ui-monospace, monospace; }
+.logview { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); overflow: auto; max-height: 60vh; font-family: ui-monospace, monospace; font-size: var(--fs-1); }
+.logview .lrow { padding: 3px var(--sp-3); border-bottom: 1px solid var(--line); white-space: pre-wrap; word-break: break-word; }
+.logview .lrow:last-child { border-bottom: 0; }
+.logview .lrow:hover { background: var(--surface-2); }
+
+/* chat (slide-over style list, not a text dump) */
+.chatlog { display: flex; flex-direction: column; gap: var(--sp-1); max-height: 22vh; overflow: auto; padding: var(--sp-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-ctl); }
+.chatlog .msg { max-width: 85%; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-ctl); background: var(--surface); border: 1px solid var(--line); font-size: var(--fs-2); align-self: flex-start; }
+.chatlog .msg.me { align-self: flex-end; background: var(--acc-bg); border-color: var(--acc-solid); }
+.chatlog .msg .who { display: block; font-size: var(--fs-1); color: var(--mut); margin-bottom: 1px; }
+
+/* dialog (replaces prompt/confirm/alert everywhere) */
+.dlg-back { position: fixed; inset: 0; background: rgba(32, 36, 46, .42); display: flex; align-items: center; justify-content: center; z-index: 50; padding: var(--sp-4); }
+.dlg { background: var(--surface); color: var(--txt); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); width: min(94vw, 460px); max-height: 88vh; overflow: auto; padding: var(--sp-5); }
+.dlg h2 { font-size: var(--fs-4); margin: 0 0 var(--sp-2); }
+.dlg .dlg-msg { color: var(--mut); font-size: var(--fs-3); margin: 0 0 var(--sp-4); white-space: pre-wrap; }
+.dlg label.f { display: block; font-size: var(--fs-2); color: var(--mut); margin-bottom: var(--sp-1); font-weight: 600; }
+.dlg input[type="text"], .dlg input[type="number"], .dlg textarea, .dlg select { width: 100%; margin-bottom: var(--sp-3); }
+.dlg .checks { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.dlg .checks label { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-3); }
+.dlg .dlg-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-2); }
+.dlg .dlg-err { color: var(--bad-tx); font-size: var(--fs-2); min-height: 1em; margin-bottom: var(--sp-2); }
+
+/* toasts (non-blocking results, e.g. Wake-on-LAN) */
+#toasts { position: fixed; bottom: var(--sp-4); right: var(--sp-4); z-index: 60; display: flex; flex-direction: column; gap: var(--sp-2); max-width: min(92vw, 380px); }
+.toast { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--acc-solid); border-radius: var(--r-ctl); box-shadow: var(--shadow); padding: var(--sp-3); font-size: var(--fs-2); }
+.toast.ok { border-left-color: var(--ok); }
+.toast.bad { border-left-color: var(--bad); }
+
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+button, input, select, textarea, nav button { transition: border-color .15s ease, background .15s ease, color .15s ease; }
+canvas.screen { width: 100%; background: #101216; border: 1px solid var(--line); border-radius: var(--r-ctl); outline: none; display: block; }
+  /* /ESO:COMPONENTS */
+  header .state { font-size: var(--fs-2); color: var(--mut); }
+  main { max-width: 1100px; }
+  textarea { min-height: 110px; }
 </style>
 </head>
 <body>
@@ -68,7 +232,7 @@
 
   <section id="tab-processes">
     <div class="row"><button class="act" id="procRefresh">Refresh</button><span class="mut" id="procCount"></span></div>
-    <table><thead><tr><th>PID</th><th>Name</th><th>Parent</th><th>Session</th><th>Memory</th><th></th></tr></thead><tbody id="procBody"></tbody></table>
+    <div class="tablewrap"><table><thead><tr><th>PID</th><th>Name</th><th>Parent</th><th>Session</th><th>Memory</th><th></th></tr></thead><tbody id="procBody"></tbody></table></div>
   </section>
 
   <section id="tab-software">
@@ -79,13 +243,13 @@
       <button class="act" id="swUpgradeAll">Upgrade all</button>
       <button class="act" id="swRefresh">Refresh</button>
     </div>
-    <pre class="out" id="swOut" style="display:none"></pre>
-    <table><thead><tr><th>Name</th><th>Version</th><th>Publisher</th><th>Id</th><th></th></tr></thead><tbody id="swBody"></tbody></table>
+    <div class="outbox" id="swOut" style="display:none;margin-bottom:var(--sp-3)"></div>
+    <div class="tablewrap"><table><thead><tr><th>Name</th><th>Version</th><th>Publisher</th><th>Id</th><th></th></tr></thead><tbody id="swBody"></tbody></table></div>
   </section>
 
   <section id="tab-services">
     <div class="row"><button class="act" id="svcRefresh">Refresh</button></div>
-    <table><thead><tr><th>Name</th><th>Display name</th><th>Status</th><th>Startup</th><th></th></tr></thead><tbody id="svcBody"></tbody></table>
+    <div class="tablewrap"><table><thead><tr><th>Name</th><th>Display name</th><th>Status</th><th>Startup</th><th></th></tr></thead><tbody id="svcBody"></tbody></table></div>
   </section>
 
   <section id="tab-run">
@@ -102,7 +266,7 @@
       <span class="mut">Runs with the agent service's full privileges — your machine, your shell.</span>
     </div>
     <textarea id="runScript" placeholder="Type a command or script…"></textarea>
-    <pre class="out" id="runOut" style="display:none"></pre>
+    <div class="outbox" id="runOut" style="display:none;margin-top:var(--sp-3)"></div>
   </section>
 
   <section id="tab-desktop">
@@ -110,20 +274,20 @@
       <select id="dtMode"><option value="View">View only</option><option value="Control" selected>Control</option></select>
       <select id="dtQuality"><option value="40">Quality: low</option><option value="60" selected>Quality: balanced</option><option value="85">Quality: high</option></select>
       <select id="dtMonitor"></select>
-      <label class="mut"><input type="checkbox" id="dtRecord"> Record session</label>
+      <label class="chk"><input type="checkbox" id="dtRecord"> Record session</label>
       <button class="act primary" id="dtStart">Start session</button>
       <button class="act danger" id="dtStop" disabled>Stop</button>
       <button class="act" id="dtCad" disabled>Ctrl+Alt+Del</button>
       <button class="act" id="dtPrivacy" disabled>Privacy: off</button>
       <span class="mut" id="dtState">No session. The person at the machine sees an on-screen indicator while a session is live.</span>
     </div>
-    <div class="mut" style="margin-bottom:.5rem">Click the screen to give it keyboard focus in Control mode. SAS (Ctrl+Alt+Del) on Windows may be blocked by OS policy — see README.</div>
-    <canvas id="dtCanvas" width="960" height="540" tabindex="0" style="width:100%;background:#000;border:1px solid var(--line);border-radius:8px;outline:none"></canvas>
-    <div class="row" style="margin-top:.5rem">
+    <div class="mut" style="margin-bottom:var(--sp-2)">Click the screen to give it keyboard focus in Control mode. SAS (Ctrl+Alt+Del) on Windows may be blocked by OS policy — see README.</div>
+    <canvas id="dtCanvas" class="screen" width="960" height="540" tabindex="0"></canvas>
+    <div class="row" style="margin-top:var(--sp-2)">
       <input id="dtChatIn" placeholder="Message the person at this machine…" style="flex:1;min-width:200px">
       <button class="act" id="dtChatSend" disabled>Send chat</button>
     </div>
-    <pre class="out" id="dtChatLog" style="display:none;max-height:18vh"></pre>
+    <div class="chatlog" id="dtChatLog" style="display:none"></div>
   </section>
 
   <section id="tab-files">
@@ -134,10 +298,10 @@
       <label class="act" style="cursor:pointer">Upload here <input type="file" id="fileUpload" style="display:none"></label>
     </div>
     <div class="mut" id="fileMsg"></div>
-    <table><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="fileBody"></tbody></table>
-    <h3 style="margin-top:1.2rem">Session recordings (.esorec)</h3>
+    <div class="tablewrap"><table><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="fileBody"></tbody></table></div>
+    <h3 style="margin-top:var(--sp-5)">Session recordings (.esorec)</h3>
     <div class="row"><button class="act" id="recRefresh">Refresh recordings</button><span class="mut">Frames recorded on THIS device when a session opts in. JSON-lines format — see USER-GUIDE.</span></div>
-    <table><thead><tr><th>File</th><th>Started</th><th>Size</th><th>Codec</th><th></th></tr></thead><tbody id="recBody"></tbody></table>
+    <div class="tablewrap"><table><thead><tr><th>File</th><th>Started</th><th>Size</th><th>Codec</th><th></th></tr></thead><tbody id="recBody"></tbody></table></div>
   </section>
 
   <section id="tab-log">
@@ -146,7 +310,7 @@
       <select id="logLines"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select>
       <button class="act" id="logRefresh">Refresh</button>
     </div>
-    <pre class="out" id="logOut"></pre>
+    <div class="logview" id="logOut"></div>
   </section>
 
   <section id="tab-access">
@@ -179,7 +343,7 @@
         <label class="small" style="display:block"><input type="checkbox" id="polDesktop"> Desktop control (off = view-only)</label>
         <label class="small" style="display:block"><input type="checkbox" id="polConsentControl"> Control sessions need local consent</label>
         <label class="small" style="display:block"><input type="checkbox" id="polConsentView"> View sessions need local consent</label>
-        <div class="row" style="margin-top:.5rem"><button class="act primary" id="polSave">Save policy</button><span class="small" id="polMsg"></span></div></div>
+        <div class="row" style="margin-top:var(--sp-2)"><button class="act primary" id="polSave">Save policy</button><span class="small" id="polMsg"></span></div></div>
       <div class="card"><h3>Owner password</h3>
         <p class="small">Owner-reserved: only you, here, can change it. The operator key can never touch it.</p>
         <div class="row"><input type="password" id="pwCurrent" placeholder="Current password" autocomplete="current-password"></div>
@@ -190,6 +354,160 @@
   </section>
 </main>
 
+<script>
+// ESO:COMPONENTS-JS
+/* EsoAgent shared components (JS) — in-page dialogs and toasts replace every
+   native browser dialog; formatters keep times and sizes human.
+   Synced verbatim into Fleet.html and Dashboard.html by
+   scripts/sync-web-assets.py; edit here, never in the HTML copies. */
+function esoEl(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+/* Generic modal. spec: {title, message, fields:[{id,label,type,value,options,checked}],
+   actions:[{id,label,kind}]} -> Promise<{action, values} | null> (null = dismissed). */
+function esoDialog(spec) {
+  return new Promise(resolve => {
+    const back = esoEl('div', 'dlg-back');
+    const dlg = esoEl('div', 'dlg');
+    dlg.setAttribute('role', 'dialog');
+    dlg.setAttribute('aria-modal', 'true');
+    dlg.appendChild(esoEl('h2', '', spec.title || ''));
+    if (spec.message) dlg.appendChild(esoEl('p', 'dlg-msg', spec.message));
+    const err = esoEl('div', 'dlg-err');
+    const inputs = {};
+    (spec.fields || []).forEach(f => {
+      if (f.type === 'checks') {
+        const wrap = esoEl('div', 'checks');
+        f.options.forEach(o => {
+          const lab = esoEl('label');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.checked = !!o.checked; cb.dataset.v = o.value;
+          lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + o.label));
+          wrap.appendChild(lab);
+        });
+        inputs[f.id] = wrap;
+        dlg.appendChild(wrap);
+        return;
+      }
+      if (f.label) { const l = esoEl('label', 'f', f.label); l.htmlFor = 'dlg-' + f.id; dlg.appendChild(l); }
+      let inp;
+      if (f.type === 'select') {
+        inp = document.createElement('select');
+        (f.options || []).forEach(o => { const op = esoEl('option', '', o.label); op.value = o.value; inp.appendChild(op); });
+        inp.value = f.value ?? '';
+      } else if (f.type === 'textarea') {
+        inp = document.createElement('textarea'); inp.value = f.value ?? '';
+      } else {
+        inp = document.createElement('input');
+        inp.type = f.type || 'text'; inp.value = f.value ?? '';
+        if (f.placeholder) inp.placeholder = f.placeholder;
+      }
+      inp.id = 'dlg-' + f.id;
+      inputs[f.id] = inp;
+      dlg.appendChild(inp);
+    });
+    dlg.appendChild(err);
+    const row = esoEl('div', 'dlg-actions');
+    let done = false;
+    const close = val => { if (done) return; done = true; back.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+    const collect = () => {
+      const values = {};
+      for (const [id, inp] of Object.entries(inputs)) {
+        if (inp.classList && inp.classList.contains('checks')) values[id] = [...inp.querySelectorAll('input:checked')].map(c => c.dataset.v);
+        else values[id] = inp.value;
+      }
+      return values;
+    };
+    (spec.actions || [{id: 'ok', label: 'OK', kind: 'primary'}]).forEach(a => {
+      const b = esoEl('button', 'act' + (a.kind === 'primary' ? ' primary' : '') + (a.kind === 'danger' ? ' danger' : ''), a.label);
+      b.onclick = () => {
+        const values = collect();
+        if (spec.validate) { const msg = spec.validate(values); if (msg) { err.textContent = msg; return; } }
+        close({action: a.id, values});
+      };
+      row.appendChild(b);
+    });
+    dlg.appendChild(row);
+    back.appendChild(dlg);
+    back.addEventListener('mousedown', e => { if (e.target === back) close(null); });
+    const onKey = e => { if (e.key === 'Escape') close(null); };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(back);
+    const first = dlg.querySelector('input:not([type=checkbox]), textarea, select');
+    (first || dlg.querySelector('button')).focus();
+  });
+}
+/* Confirm dialog -> Promise<boolean>. danger=true styles the confirm action. */
+async function esoConfirm(title, message, confirmLabel, danger) {
+  const r = await esoDialog({title, message, actions: [
+    {id: 'no', label: 'Cancel'},
+    {id: 'yes', label: confirmLabel || 'Confirm', kind: danger ? 'danger' : 'primary'},
+  ]});
+  return !!r && r.action === 'yes';
+}
+/* Single-text-field dialog -> Promise<string|null> (null = cancelled). */
+async function esoTextDialog(title, label, initial, opts = {}) {
+  const r = await esoDialog({title, message: opts.message, fields: [{id: 'v', label, value: initial ?? '', placeholder: opts.placeholder}],
+    validate: opts.required ? v => (v.v.trim() ? '' : (opts.requiredMsg || 'A value is required.')) : null,
+    actions: [{id: 'no', label: 'Cancel'}, {id: 'yes', label: opts.okLabel || 'Save', kind: 'primary'}]});
+  return r && r.action === 'yes' ? r.values.v : null;
+}
+/* Non-blocking result toast (replaces the blocking alert box). kind: '' | 'ok' | 'bad'. */
+function esoToast(text, kind = '') {
+  let host = document.getElementById('toasts');
+  if (!host) { host = esoEl('div'); host.id = 'toasts'; document.body.appendChild(host); }
+  const t = esoEl('div', 'toast ' + kind, text);
+  host.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, 5200);
+}
+/* Human sizes and times (G20: no raw bytes, no raw timestamps). */
+function fmtBytes(n) {
+  if (n == null || n === '') return '—';
+  n = Number(n); if (isNaN(n)) return '—';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
+  while (n >= 1024 && i < 4) { n /= 1024; i++; }
+  return n.toFixed(1) + ' ' + u[i];
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  let rel;
+  if (s < 45) rel = 'just now';
+  else if (s < 3600) rel = Math.floor(s / 60) + ' min ago';
+  else if (s < 86400) rel = Math.floor(s / 3600) + ' h ago';
+  else rel = Math.floor(s / 86400) + ' d ago';
+  const abs = d.toLocaleString();
+  return `<span title="${abs.replace(/"/g, '&quot;')}">${rel}</span>`;
+}
+/* Render a JSON value as a key/value table (device status, doctor, diagnose…).
+   Returns an HTML string; nested objects flatten with dotted keys. */
+function kvRows(v, prefix, out) {
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const keys = Object.keys(v);
+    if (!keys.length) out.push([prefix || '—', '—']);
+    keys.forEach(k => kvRows(v[k], prefix ? prefix + '.' + k : k, out));
+  } else if (Array.isArray(v)) {
+    if (!v.length) out.push([prefix, '—']);
+    else if (v.every(x => x === null || typeof x !== 'object')) out.push([prefix, v.join(', ')]);
+    else v.forEach((x, i) => kvRows(x, prefix + '[' + i + ']', out));
+  } else {
+    out.push([prefix, v === null || v === undefined ? '—' : String(v)]);
+  }
+  return out;
+}
+function kvTable(v) {
+  const rows = kvRows(v, '', []);
+  if (!rows.length) return '<div class="empty">No data.</div>';
+  return '<div class="tablewrap"><table><tbody>' + rows.map(r =>
+    `<tr><td style="width:38%;color:var(--mut);font-weight:600">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('') + '</tbody></table></div>';
+}
+  // /ESO:COMPONENTS-JS
+</script>
 <script>
 let CSRF = '';
 const $ = id => document.getElementById(id);
@@ -202,7 +520,6 @@ async function api(path, opts = {}) {
   const t = await r.text();
   try { return JSON.parse(t); } catch { return t; }
 }
-function fmtBytes(n) { if (n == null) return '—'; const u=['B','KB','MB','GB','TB']; let i=0; while (n>=1024&&i<4){n/=1024;i++;} return n.toFixed(1)+' '+u[i]; }
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
@@ -216,13 +533,17 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
 async function loadOverview() {
   const s = await api('/panel/api/status');
   $('hdrState').textContent = s.hostname + ' · ' + s.os;
-  const ram = s.ramTotalBytes ? Math.round(100 * s.ramUsedBytes / s.ramTotalBytes) + '% of ' + fmtBytes(s.ramTotalBytes) : '—';
+  const ramPct = s.ramTotalBytes ? Math.round(100 * s.ramUsedBytes / s.ramTotalBytes) : null;
+  const ram = s.ramTotalBytes ? ramPct + '% of ' + fmtBytes(s.ramTotalBytes) : '—';
   const batt = s.battery && s.battery.present ? (s.battery.percent ?? '?') + '% · ' + (s.battery.onAc ? 'AC' : 'battery') : 'No battery';
-  const disks = (s.disks || []).map(d => `<div class="card"><h3>Disk ${esc(d.name)}</h3><div class="big">${fmtBytes(d.freeBytes)} free</div><div class="small">of ${fmtBytes(d.totalBytes)}</div></div>`).join('');
+  const disks = (s.disks || []).map(d => {
+    const usedPct = d.totalBytes ? Math.round(100 * (d.totalBytes - d.freeBytes) / d.totalBytes) : 0;
+    return `<div class="card"><h3>Disk ${esc(d.name)}</h3><div class="big">${fmtBytes(d.freeBytes)} free</div><div class="small">of ${fmtBytes(d.totalBytes)}</div><div class="meter"><div style="width:${usedPct}%"></div></div></div>`;
+  }).join('');
   $('ovCards').innerHTML = `
     <div class="card"><h3>System</h3><div class="big">${esc(s.os)}</div><div class="small">${esc(s.osDescription)}</div></div>
-    <div class="card"><h3>CPU</h3><div class="big">${s.cpuPercent == null ? '—' : s.cpuPercent.toFixed(1) + '%'}</div></div>
-    <div class="card"><h3>RAM</h3><div class="big">${ram}</div></div>
+    <div class="card"><h3>CPU</h3><div class="big">${s.cpuPercent == null ? '—' : s.cpuPercent.toFixed(1) + '%'}</div>${s.cpuPercent == null ? '' : `<div class="meter"><div style="width:${Math.min(100, Math.round(s.cpuPercent))}%"></div></div>`}</div>
+    <div class="card"><h3>RAM</h3><div class="big">${ram}</div>${ramPct == null ? '' : `<div class="meter"><div style="width:${ramPct}%"></div></div>`}</div>
     <div class="card"><h3>Battery</h3><div class="big">${batt}</div></div>
     <div class="card"><h3>Uptime</h3><div class="big">${Math.floor(s.uptimeSeconds/3600)}h ${Math.floor(s.uptimeSeconds%3600/60)}m</div></div>
     <div class="card"><h3>Agent</h3><div class="big">v${esc(s.agentVersion)}</div><div class="small">Tailnet: ${esc((s.tailnetIps||[]).join(', ') || '—')} · API access: ${s.locked ? '<span class="bad">PAUSED</span>' : '<span class="ok">active</span>'}</div></div>
@@ -232,11 +553,11 @@ async function loadOverview() {
 async function loadProcesses() {
   const list = await api('/panel/api/processes');
   $('procCount').textContent = list.length + ' processes';
-  $('procBody').innerHTML = list.map(p => `<tr><td>${p.pid}</td><td>${esc(p.name)}</td><td>${p.parentPid}</td><td>${p.sessionId}</td><td>${fmtBytes(p.workingSetBytes)}</td>
-    <td><button class="act danger" onclick="killProc(${p.pid})">Kill</button></td></tr>`).join('');
+  $('procBody').innerHTML = list.map(p => `<tr><td class="num">${p.pid}</td><td>${esc(p.name)}</td><td class="num">${p.parentPid}</td><td class="num">${p.sessionId}</td><td class="num">${fmtBytes(p.workingSetBytes)}</td>
+    <td><button class="act danger" onclick="killProc(${p.pid}, '${esc(p.name)}')">Kill</button></td></tr>`).join('');
 }
-async function killProc(pid) {
-  if (!confirm('Kill process ' + pid + '?')) return;
+async function killProc(pid, name) {
+  if (!await esoConfirm('Kill process', 'Kill process ' + pid + (name ? ' (' + name + ')' : '') + '? Unsaved work in it is lost.', 'Kill process', true)) return;
   await api('/panel/api/processes/' + pid + '/kill', {method: 'POST'});
   loadProcesses();
 }
@@ -254,7 +575,10 @@ async function swInstall() {
   showSw(await api('/panel/api/software/install', {method: 'POST', json: kind === 'file' ? {kind, path: v} : {kind, id: v}}));
   loadSoftware();
 }
-async function swUninstall(name) { if (!confirm('Uninstall ' + name + '?')) return; showSw(await api('/panel/api/software/uninstall', {method: 'POST', json: {name}})); loadSoftware(); }
+async function swUninstall(name) {
+  if (!await esoConfirm('Uninstall software', 'Uninstall ' + name + ' from this machine?', 'Uninstall', true)) return;
+  showSw(await api('/panel/api/software/uninstall', {method: 'POST', json: {name}})); loadSoftware();
+}
 async function swUpgrade(id) { showSw(await api('/panel/api/software/upgrade', {method: 'POST', json: {id}})); loadSoftware(); }
 $('swInstall').onclick = swInstall;
 $('swUpgradeAll').onclick = async () => { showSw(await api('/panel/api/software/upgrade', {method: 'POST', json: {}})); loadSoftware(); };
@@ -279,9 +603,9 @@ async function loadFiles(path) {
   const r = await api('/panel/api/files/list' + (path ? '?path=' + encodeURIComponent(path) : ''));
   if (r.error) { $('fileMsg').textContent = r.error; return; }
   $('filePath').value = r.path; fileParent = r.parent; $('fileMsg').textContent = '';
-  $('fileBody').innerHTML = r.entries.map(e => `<tr><td>${e.isDir ? '📁' : '📄'} ${e.isDir ? `<a href="#" onclick="loadFiles('${esc(e.path).replace(/\\/g,'\\\\')}');return false" style="color:var(--acc)">${esc(e.name)}</a>` : esc(e.name)}</td>
-    <td>${e.isDir ? '' : fmtBytes(e.size)}</td>
-    <td>${e.isDir ? '' : `<a class="act" style="text-decoration:none;padding:.3rem .6rem;border:1px solid var(--line);border-radius:6px" href="/panel/api/files/download?path=${encodeURIComponent(e.path)}">Download</a>`}</td></tr>`).join('');
+  $('fileBody').innerHTML = r.entries.map(e => `<tr><td>${e.isDir ? '📁' : '📄'} ${e.isDir ? `<a href="#" onclick="loadFiles('${esc(e.path).replace(/\\/g,'\\\\')}');return false">${esc(e.name)}</a>` : esc(e.name)}</td>
+    <td class="num">${e.isDir ? '' : fmtBytes(e.size)}</td>
+    <td>${e.isDir ? '' : `<a class="act" href="/panel/api/files/download?path=${encodeURIComponent(e.path)}">Download</a>`}</td></tr>`).join('');
 }
 $('fileGo').onclick = () => loadFiles($('filePath').value);
 $('fileUp').onclick = () => { if (fileParent) loadFiles(fileParent); };
@@ -309,7 +633,12 @@ $('fileUpload').onchange = async ev => {
 
 async function loadLog() {
   const r = await api('/panel/api/logs?lines=' + $('logLines').value + '&filter=' + encodeURIComponent($('logFilter').value));
-  $('logOut').textContent = (r.lines || []).join('\n');
+  const lines = r.lines || [];
+  $('logOut').innerHTML = '';
+  if (!lines.length) { $('logOut').appendChild(esoEl('div', 'lrow mut', 'No log lines match.')); return; }
+  const frag = document.createDocumentFragment();
+  lines.forEach(l => frag.appendChild(esoEl('div', 'lrow', l)));
+  $('logOut').appendChild(frag);
 }
 $('logRefresh').onclick = loadLog;
 
@@ -364,13 +693,13 @@ async function loadRecordings() {
   const recs = await api('/panel/api/recordings');
   $('recBody').innerHTML = (recs || []).map(r => `<tr>
     <td><code>${esc(r.name)}</code></td>
-    <td>${esc((r.startedAt || '').replace('T', ' ').slice(0, 19))}</td>
-    <td>${r.sizeBytes}</td><td>${esc(r.codec)} ${r.width}×${r.height}</td>
-    <td><a class="act" style="text-decoration:none;padding:.3rem .6rem;border:1px solid var(--line);border-radius:6px;color:var(--txt)" href="/panel/api/recordings/${encodeURIComponent(r.name)}">Download</a>
+    <td class="num">${fmtTime(r.startedAt)}</td>
+    <td class="num">${fmtBytes(r.sizeBytes)}</td><td>${esc(r.codec)} ${r.width}×${r.height}</td>
+    <td><a class="act" href="/panel/api/recordings/${encodeURIComponent(r.name)}">Download</a>
         <button class="act danger" onclick="delRecording('${esc(r.name)}')">Delete</button></td></tr>`).join('');
 }
 window.delRecording = async name => {
-  if (!confirm('Delete recording ' + name + '?')) return;
+  if (!await esoConfirm('Delete recording', 'Delete recording ' + name + '?', 'Delete', true)) return;
   await api('/panel/api/recordings/' + encodeURIComponent(name) + '/delete', {method: 'POST'});
   loadRecordings();
 };
@@ -383,7 +712,7 @@ $('accChangePw').onclick = async () => {
   if (r.changed) { $('pwCurrent').value = ''; $('pwNew').value = ''; }
 };
 $('accRotate').onclick = async () => {
-  if (!confirm('Rotate the API token? The old token stops working immediately.')) return;
+  if (!await esoConfirm('Rotate API token', 'Rotate the API token? The old token stops working immediately and the assistant must be given the new one.', 'Rotate token', true)) return;
   const r = await api('/panel/api/access/rotate-token', {method: 'POST'});
   $('accNewToken').textContent = r.token || '(error)';
 };
@@ -407,6 +736,14 @@ $('langToggle').onclick = () => { lang = lang === 'ar' ? 'en' : 'ar'; localStora
 let dtWs = null, dtCodec = 'jpeg', dtMode = 'View', dtOff = null, dtOffCtx = null, dtPrivacy = false;
 const dtCanvas = $('dtCanvas'), dtCtx = dtCanvas.getContext('2d');
 function dtSend(obj) { if (dtWs && dtWs.readyState === 1) dtWs.send(JSON.stringify(obj)); }
+function dtChatAdd(who, text, mine) {
+  const log = $('dtChatLog'); log.style.display = 'flex';
+  const m = esoEl('div', 'msg' + (mine ? ' me' : ''));
+  m.appendChild(esoEl('span', 'who', who));
+  m.appendChild(document.createTextNode(text));
+  log.appendChild(m);
+  log.scrollTop = log.scrollHeight;
+}
 async function dtDrawRawDiff(b64) {
   const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   const dv = new DataView(bytes.buffer);
@@ -455,8 +792,7 @@ $('dtStart').onclick = () => {
     } else if (msg.type === 'clipboard') {
       try { await navigator.clipboard.writeText(msg.text); } catch {}
     } else if (msg.type === 'chat') {
-      const log = $('dtChatLog'); log.style.display = 'block';
-      log.textContent += 'device: ' + msg.text + '\n';
+      dtChatAdd('device', msg.text, false);
     } else if (msg.type === 'privacy') {
       dtPrivacy = !!msg.enabled;
       $('dtPrivacy').textContent = dtPrivacy ? 'Privacy: ON' : 'Privacy: off';
@@ -472,8 +808,7 @@ $('dtPrivacy').onclick = () => dtSend({type: 'privacy', enabled: !dtPrivacy});
 $('dtChatSend').onclick = () => {
   const text = $('dtChatIn').value.trim(); if (!text) return;
   $('dtChatIn').value = '';
-  const log = $('dtChatLog'); log.style.display = 'block';
-  log.textContent += 'you: ' + text + '\n';
+  dtChatAdd('you', text, true);
   dtSend({type: 'chat', text, from: 'owner'});
 };
 $('dtCad').onclick = () => { dtSend({type: 'input', kind: 'key', key: 'ctrl+alt+delete', down: true}); dtSend({type: 'input', kind: 'key', key: 'ctrl+alt+delete', down: false}); };

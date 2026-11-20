@@ -6,6 +6,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>EsoAgent.Tray</RootNamespace>
     <AssemblyName>EsoAgent.Tray</AssemblyName>
+    <!-- Exe file icon only (Explorer/taskbar): the golden wing. The
+         runtime tray status icons stay the embedded Assets\*.ico set. -->
+    <ApplicationIcon>..\..\assets\brand\app.ico</ApplicationIcon>
     <!-- Tray companion: runs in the owner's interactive session. The service
          (session 0) cannot capture the screen or run interactive processes, so
          it forwards those requests here over the EsoAgentTrayPipe named pipe.

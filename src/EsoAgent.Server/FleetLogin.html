@@ -6,18 +6,111 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EsoAgent Fleet — Owner Login</title>
 <style>
-  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 2rem; width: min(92vw, 360px); }
-  h1 { font-size: 1.25rem; margin: 0 0 .25rem; }
-  p.sub { color: #8b949e; margin: 0 0 1.25rem; font-size: .9rem; }
-  label { display: block; font-size: .85rem; margin-bottom: .35rem; color: #8b949e; }
-  input { width: 100%; box-sizing: border-box; padding: .6rem; border-radius: 8px; border: 1px solid #30363d; background: #0d1117; color: #e6edf3; margin-bottom: 1rem; }
-  button { width: 100%; padding: .65rem; border: 0; border-radius: 8px; background: #E3B341; color: #141414; font-weight: 700; cursor: pointer; }
-  .error { background: #3d1d1d; border: 1px solid #8b2c2c; color: #ffb4a2; padding: .6rem .8rem; border-radius: 8px; margin-bottom: 1rem; font-size: .9rem; }
-  .langrow { text-align: right; margin-bottom: .5rem; }
-  .langrow button { width: auto; padding: .3rem .7rem; background: #21262d; border: 1px solid #30363d; font-weight: 400; }
-  :focus-visible { outline:2px solid var(--acc); outline-offset:1px; }
-  button, input, select, textarea { transition:border-color .15s ease, background .15s ease; }
+  /* ESO:TOKENS */
+/* EsoAgent design tokens — the single source for every surface.
+   Web panels consume the light theme (:root). The dark variant below is the
+   refined-dark token set the desktop App's resource dictionary mirrors
+   (src/EsoAgent.App/Themes/EsoTokens.axaml). Gold is an accent only:
+   primary actions, active states, the wing mark — never a theme.
+   Contrast gate: every text/background pair >= 4.5:1, verified by
+   scripts/check-contrast.py. Semantic colours pair a fill value (dots,
+   borders) with a -tx value darkened/lightened until it passes as text. */
+:root {
+  /* surfaces & text (light — the website law: soft, comfortable, light) */
+  --bg: #F7F5F1;
+  --surface: #FFFFFF;
+  --surface-2: #FBFAF7;
+  --line: #E6E1D6;
+  --txt: #20242E;
+  --mut: #646B76;
+  /* brand accent */
+  --acc: #8A6508;
+  --acc-solid: #E3B341;
+  --on-acc: #1A1A1A;
+  --acc-bg: #FAF1DA;
+  /* state semantics: fill / text-safe / tint */
+  --ok: #2F9E44;
+  --ok-tx: #1E7A34;
+  --ok-bg: #E7F5EC;
+  --warn: #E08A00;
+  --warn-tx: #8F5E00;
+  --warn-bg: #FBF0DC;
+  --bad: #D64545;
+  --bad-tx: #B02A2A;
+  --bad-bg: #FBEAEA;
+  --bad-bg-strong: #F9DADA;
+  --mut-bg: #F0EEE8;
+  /* type scale (system UI stack on both platforms) */
+  --fs-1: 12px;
+  --fs-2: 13px;
+  --fs-3: 14px;
+  --fs-4: 16px;
+  --fs-5: 20px;
+  --fs-6: 24px;
+  /* spacing: 4-pt scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  /* radii: 8 controls, 12 cards, 999 badges */
+  --r-ctl: 8px;
+  --r-card: 12px;
+  --r-badge: 999px;
+  /* elevation: one soft shadow level, dialogs/menus only */
+  --shadow: 0 8px 30px rgba(32, 36, 46, .16), 0 2px 6px rgba(32, 36, 46, .10);
+  --row-h: 36px;
+}
+[data-theme="dark"] {
+  /* refined dark — same tokens, App variant */
+  --bg: #131519;
+  --surface: #1B1E24;
+  --surface-2: #21252D;
+  --line: #2C3038;
+  --txt: #ECEEF2;
+  --mut: #9BA1AC;
+  --acc: #E3B341;
+  --acc-solid: #E3B341;
+  --on-acc: #1A1A1A;
+  --acc-bg: #33290F;
+  --ok: #3FB950;
+  --ok-tx: #4CC38A;
+  --ok-bg: #14301F;
+  --warn: #D29922;
+  --warn-tx: #E3B341;
+  --warn-bg: #38300F;
+  --bad: #F87171;
+  --bad-tx: #F08A8A;
+  --bad-bg: #3A1F22;
+  --bad-bg-strong: #4A262B;
+  --mut-bg: #262A31;
+  --shadow: 0 8px 30px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .4);
+}
+  /* /ESO:TOKENS */
+  /* ESO:LOGIN */
+/* EsoAgent login pages — light theme on the shared tokens. The form markup is
+   injected by the server (Panel.cs / Dashboard.cs) as bare label/input/button
+   elements inside .card, so this sheet styles elements, not classes.
+   Synced into FleetLogin.html and DashboardLogin.html by
+   scripts/sync-web-assets.py; edit here, never in the HTML copies. */
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: var(--sp-4); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); padding: var(--sp-6); width: min(94vw, 380px); }
+h1 { font-size: var(--fs-5); margin: 0 0 var(--sp-1); text-align: center; }
+p.sub { color: var(--mut); margin: 0 0 var(--sp-5); font-size: var(--fs-2); text-align: center; }
+label { display: block; font-size: var(--fs-2); font-weight: 600; margin-bottom: var(--sp-1); color: var(--mut); }
+input { width: 100%; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--surface); color: var(--txt); margin-bottom: var(--sp-4); font: inherit; }
+button { width: 100%; padding: var(--sp-3); border: 1px solid var(--acc-solid); border-radius: var(--r-ctl); background: var(--acc-solid); color: var(--on-acc); font-weight: 700; cursor: pointer; font: inherit; }
+button:hover { filter: brightness(1.04); }
+.error { background: var(--bad-bg); border: 1px solid var(--bad); color: var(--bad-tx); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-ctl); margin-bottom: var(--sp-4); font-size: var(--fs-2); font-weight: 600; }
+.langrow { text-align: right; margin-bottom: var(--sp-2); }
+.langrow button { width: auto; padding: var(--sp-1) var(--sp-3); background: var(--surface); border: 1px solid var(--line); color: var(--txt); font-weight: 400; }
+.brandwrap { display: flex; justify-content: center; margin-bottom: var(--sp-2); }
+.brandmark { display: inline-flex; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(32, 36, 46, .18); }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+button, input { transition: border-color .15s ease, background .15s ease; }
+  /* /ESO:LOGIN */
 </style>
 </head>
 <body>

@@ -5,6 +5,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>EsoAgent.Windows</RootNamespace>
     <AssemblyName>EsoAgent.Windows</AssemblyName>
+    <ApplicationIcon>..\..\assets\brand\app.ico</ApplicationIcon>
     <!-- Windows head: the EsoAgent service (LocalSystem, session 0). Supplies the
          Windows implementations of Core's platform abstractions and hosts the
          shared Kestrel API from EsoAgent.Core as a Windows service. -->

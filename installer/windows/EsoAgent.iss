@@ -38,7 +38,7 @@ DefaultDirName={autopf}\EsoAgent
 DefaultGroupName=EsoAgent
 DisableProgramGroupPage=yes
 OutputBaseFilename=EsoAgent-Setup-{#AppVersion}
-SetupIconFile=..\..\assets\brand\png\app-icon.ico
+SetupIconFile=..\..\assets\brand\app.ico
 UninstallDisplayIcon={app}\EsoAgent.App.exe
 UninstallDisplayName=EsoAgent {#AppVersion}
 PrivilegesRequired=admin
@@ -59,6 +59,10 @@ Name: "arabic"; MessagesFile: "compiler:Languages\Arabic.isl"
 ; staged next to this script by the release workflow as .\payload\.
 Source: "payload\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "verify-install.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; The golden-wing application icon, installed next to the exes: the
+; shortcuts below name it explicitly (IconFilename), so the desktop and
+; Start Menu show the wing even before the exe icon cache is built.
+Source: "..\..\assets\brand\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; \
@@ -70,10 +74,12 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; \
 ; path in {app}; the tray is a background companion (autostart via
 ; [Registry]) and the agent is a service, so neither gets a shortcut.
 Name: "{group}\EsoAgent"; Filename: "{app}\EsoAgent.App.exe"; \
-  WorkingDir: "{app}"; Comment: "Open the EsoAgent app"
+  WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; \
+  Comment: "Open the EsoAgent app"
 Name: "{group}\Uninstall EsoAgent"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\EsoAgent"; Filename: "{app}\EsoAgent.App.exe"; \
-  WorkingDir: "{app}"; Comment: "Open the EsoAgent app"; Tasks: desktopicon
+  WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; \
+  Comment: "Open the EsoAgent app"; Tasks: desktopicon
 
 [Registry]
 ; Tray starts at user login (the agent service itself is boot-registered

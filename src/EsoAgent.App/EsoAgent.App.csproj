@@ -9,6 +9,11 @@
          project is UI + the two WebSocket session clients (desktop, exec
          stream) that the CLI only drives from a console. -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The golden-wing application icon (assets/brand/app.ico, rendered
+         by scripts/render-brand.py): embedded into the exe so Explorer,
+         the desktop/Start shortcuts and Apps & Features show the wing
+         instead of the blank default icon. -->
+    <ApplicationIcon>..\..\assets\brand\app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.22" />
@@ -17,6 +22,9 @@
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\*.png" />
+    <!-- Multi-resolution form of the same icon for the window/taskbar:
+         Windows picks the size it needs instead of scaling one PNG. -->
+    <AvaloniaResource Include="Assets\app.ico" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\EsoAgent.Core\EsoAgent.Core.csproj" />
