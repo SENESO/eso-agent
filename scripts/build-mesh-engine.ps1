@@ -15,6 +15,11 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+# Resolve -Out to an absolute path BEFORE any Push-Location: the build below
+# runs inside the source clone, so a relative output path would land the exe
+# (and the later Get-FileHash) in the wrong directory.
+$Out = [System.IO.Path]::GetFullPath($Out)
+
 $PinCommit = "b3bc704ef0ee21a36298601a9e1e5ff90377ac52"
 $PinTag = "v0.0.20250522"
 $RepoUrls = @("https://git.zx2c4.com/wireguard-go", "https://github.com/WireGuard/wireguard-go")

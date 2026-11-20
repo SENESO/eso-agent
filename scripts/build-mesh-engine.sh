@@ -28,6 +28,11 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$OUT" ]] || { echo "usage: build-mesh-engine.sh --out DIR [--arch amd64]" >&2; exit 2; }
 
+# Absolutize OUT before the build subshell changes directory into the source
+# clone; a relative --out would otherwise land the exe inside the clone.
+mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd)"
+
 GO="${GO:-go}"
 command -v "$GO" >/dev/null 2>&1 || { echo "go toolchain not found (set GO=/path/to/go)" >&2; exit 1; }
 command -v git >/dev/null 2>&1 || { echo "git not found" >&2; exit 1; }
