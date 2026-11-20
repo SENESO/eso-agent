@@ -22,7 +22,7 @@
 ;     (see CODE_SIGNING.md). Unsigned builds stay unsigned — never fake.
 
 #define AppName "EsoAgent"
-#define AppVersion "1.2.4"
+#define AppVersion "1.2.5"
 #define AppPublisher "EsoAgent"
 #define AppURL "https://github.com/SENESO/eso-agent"
 
@@ -57,6 +57,10 @@ Name: "arabic"; MessagesFile: "compiler:Languages\Arabic.isl"
 [Files]
 ; The win-x64 publish output (service + tray + app + client + scripts),
 ; staged next to this script by the release workflow as .\payload\.
+; The payload also carries the embedded mesh engine — eso-mesh.exe +
+; wintun.dll + licenses\ (built and hash-verified by scripts\
+; build-mesh-engine.ps1 and scripts\fetch-wintun.ps1 during the release
+; build), so the tunnel needs no separate WireGuard install, ever.
 Source: "payload\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "verify-install.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; The golden-wing application icon, installed next to the exes: the

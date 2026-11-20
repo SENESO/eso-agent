@@ -2,7 +2,7 @@
   <PropertyGroup>
     <!-- THE product version. One source for agent, server, client, app,
          tray and installers (item 45). Bump here only. -->
-    <Version>1.2.4</Version>
+    <Version>1.2.5</Version>
     <AssemblyVersion>1.2.1.0</AssemblyVersion>
     <FileVersion>1.2.1.0</FileVersion>
     <InformationalVersion>1.2.1</InformationalVersion>
