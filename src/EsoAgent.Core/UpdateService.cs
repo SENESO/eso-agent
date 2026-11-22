@@ -136,9 +136,16 @@ public sealed class UpdateService
         ZipFile.ExtractToDirectory(package, extractDir);
 
         string scriptName = OperatingSystem.IsWindows() ? "update-apply.ps1" : "update-apply.sh";
-        var script = Path.Combine(appDir, scriptName);
+        // The script that ships INSIDE the package applies the package: it
+        // knows the package's layout (the v1.2.9+ payload is a folder, not
+        // two self-contained exes — an older installed script would swap
+        // only the exes and strand the new build without its runtime
+        // files). The installed copy next to the binaries is the fallback
+        // for hand-assembled packages that carry no script.
+        var script = Path.Combine(extractDir, scriptName);
+        if (!File.Exists(script)) script = Path.Combine(appDir, scriptName);
         if (!File.Exists(script))
-            return new OperationResult { Success = false, Message = $"Apply script {scriptName} not found next to the agent binaries." };
+            return new OperationResult { Success = false, Message = $"Apply script {scriptName} not found in the package or next to the agent binaries." };
 
         var req = OperatingSystem.IsWindows()
             ? new ExecRequest { File = "powershell.exe", Args = new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, extractDir, appDir } }

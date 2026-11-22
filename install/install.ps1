@@ -36,18 +36,33 @@ $existing = Get-Service -Name "EsoAgent" -ErrorAction SilentlyContinue
 if ($existing) { Stop-Service -Name "EsoAgent" -Force -ErrorAction SilentlyContinue }
 
 # --- copy binaries ---
+# The payload is a FOLDER now (installer diet, BUILD-REPORT §19): the
+# service, tray and app are framework-dependent-style apphosts sharing
+# ONE laid-out runtime, instead of two self-contained single-file exes
+# at ~97 MB and ~189 MB. Every payload file must land in $InstallDir -
+# copying only the exes would strand the build without its runtime.
 # When the Inno installer runs this script, the script already sits
-# inside $InstallDir with the binaries beside it - copying a file onto
+# inside $InstallDir with the payload beside it - copying a file onto
 # itself throws, so skip any copy whose source IS the destination.
-function Copy-IfNewLocation([string]$SourceFile, [string]$DestDir) {
-    $destFile = Join-Path $DestDir (Split-Path $SourceFile -Leaf)
-    if ([IO.Path]::GetFullPath($SourceFile) -ne [IO.Path]::GetFullPath($destFile)) {
-        Copy-Item $SourceFile $DestDir -Force
+# The data dir and update backups are never payload: skip them (in the
+# Inno case they already live inside the tree being walked).
+function Copy-Payload([string]$SourceDir, [string]$DestDir) {
+    $srcRoot = [IO.Path]::GetFullPath($SourceDir)
+    foreach ($file in Get-ChildItem $SourceDir -Recurse -File) {
+        $rel = $file.FullName.Substring($srcRoot.Length).TrimStart('\', '/')
+        if ($rel -like "data\*" -or $rel -like "backup-*\*") { continue }
+        $destFile = Join-Path $DestDir $rel
+        if ([IO.Path]::GetFullPath($file.FullName) -eq [IO.Path]::GetFullPath($destFile)) { continue }
+        New-Item -ItemType Directory -Force -Path (Split-Path $destFile -Parent) | Out-Null
+        Copy-Item $file.FullName $destFile -Force
     }
 }
-Copy-IfNewLocation (Join-Path $binSrc "EsoAgent.Windows.exe") $InstallDir
-Copy-IfNewLocation (Join-Path $binSrc "EsoAgent.Tray.exe") $InstallDir
-Copy-IfNewLocation (Join-Path $src "update-apply.ps1") $InstallDir
+Copy-Payload $binSrc $InstallDir
+if ([IO.Path]::GetFullPath($src) -ne [IO.Path]::GetFullPath($binSrc)) {
+    # Repo-dev layout: the scripts sit apart from the binaries; the
+    # applier must still land next to the installed binaries.
+    Copy-Item (Join-Path $src "update-apply.ps1") $InstallDir -Force
+}
 
 # --- config (esoagent.json) ---
 # PRESERVE an existing config. An upgrade must never wipe a fleet

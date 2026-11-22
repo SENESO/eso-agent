@@ -8,13 +8,41 @@ New-Item -ItemType Directory -Force -Path $dist | Out-Null
 function Pub($project, $rid, $out) {
     dotnet publish $project -c Release -r $rid --self-contained true `
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-        -p:DebugType=none -o $out --nologo -v q
+        -p:DebugType=none -p:SatelliteResourceLanguages=en -o $out --nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "publish failed: $project ($rid)" }
 }
 
-Write-Host "== Windows service + tray (win-x64) =="
-Pub "src/EsoAgent.Windows" "win-x64" "$dist\pkg-windows"
-Pub "src/EsoAgent.Tray" "win-x64" "$dist\pkg-windows"
+# Windows payload (installer diet, BUILD-REPORT §19; same layout as
+# publish.sh): service + tray publish NON-single-file into ONE folder
+# so the shared frameworks land once, satellites are English-only
+# (the runtime packs ship no Arabic resources; the product's own
+# AR/EN strings are in the app), and the WPF + design-time files no
+# shipped code can reach are pruned (the tray is WinForms-only; no
+# project references WPF; System.Windows.Forms.Design.dll is the
+# Visual Studio designer assembly).
+function PubWin($project, $out) {
+    dotnet publish $project -c Release -r win-x64 --self-contained true `
+        -p:DebugType=none -p:SatelliteResourceLanguages=en -o $out --nologo -v q
+    if ($LASTEXITCODE -ne 0) { throw "publish failed: $project (win-x64)" }
+}
+
+$PruneWin = @(
+    "PresentationFramework.dll", "PresentationCore.dll", "PresentationUI.dll",
+    "ReachFramework.dll", "System.Windows.Controls.Ribbon.dll",
+    "PresentationNative_cor3.dll", "wpfgfx_cor3.dll", "D3DCompiler_47_cor3.dll",
+    "PenImc_cor3.dll", "UIAutomationClientSideProviders.dll", "System.Printing.dll",
+    "PresentationFramework.Aero.dll", "PresentationFramework.Aero2.dll",
+    "PresentationFramework.AeroLite.dll", "PresentationFramework.Classic.dll",
+    "PresentationFramework.Luna.dll", "PresentationFramework.Royale.dll",
+    "PresentationFramework-SystemData.dll", "PresentationFramework-SystemDrawing.dll",
+    "PresentationFramework-SystemXml.dll", "PresentationFramework-SystemXmlLinq.dll",
+    "System.Windows.Presentation.dll", "System.Windows.Forms.Design.dll"
+)
+
+Write-Host "== Windows service + tray (win-x64, shared-runtime folder) =="
+PubWin "src/EsoAgent.Windows" "$dist\pkg-windows"
+PubWin "src/EsoAgent.Tray" "$dist\pkg-windows"
+foreach ($f in $PruneWin) { Remove-Item (Join-Path "$dist\pkg-windows" $f) -ErrorAction SilentlyContinue }
 Copy-Item install\install.ps1, install\uninstall.ps1, install\update-apply.ps1 "$dist\pkg-windows\"
 Write-Host "== Embedded mesh engine (eso-mesh.exe + wintun.dll) =="
 # The Windows package must never ship without the embedded engine: a failed
