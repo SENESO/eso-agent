@@ -4,6 +4,23 @@ All notable changes to EsoAgent are documented here. The project follows
 semantic versioning; the version lives in one place (`Directory.Build.props`)
 and is stamped on every surface — agent, fleet server, client, and app.
 
+## [1.3.1] — 2026-11-22
+
+One fix: the mesh tunnel no longer resets every 30 seconds.
+
+- **Mesh applies are now idempotent.** The fleet server re-pushes
+  each device's state every 30 seconds, so a device that lost its
+  state heals by itself. The mesh frame was applied in full on
+  every push, and a full apply replaced the engine's whole peer
+  table — wiping handshake state, session keys and the traffic
+  counters on every tick. A handshake could complete and still be
+  gone half a minute later, so nothing over the mesh survived.
+  An apply whose configuration is unchanged is now skipped: the
+  engine, the tunnel and the firewall rules are touched only when
+  something actually changed. A device that did lose its state is
+  still configured in full, exactly once. Nothing else changed —
+  the resync itself stays, at the same cadence.
+
 ## [1.3.0] — 2026-11-22
 
 Devices no longer need the fleet server to find or reach each other.
