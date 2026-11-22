@@ -104,6 +104,48 @@ public interface IDesktopHost
     /// owner's policy requires consent, and denial is the fail-closed answer).</summary>
     Task<bool> RequestConsentAsync(string mode, TimeSpan timeout, CancellationToken ct = default)
         => Task.FromResult(false);
+
+    /// <summary>Consent v2 (UI Phase 5): the same prompt, but the local user
+    /// is told WHO is asking and WHAT the session can do (ConsentRequest).
+    /// Default: forwards to the mode-only overload, so hosts that predate
+    /// v2 keep working unchanged.</summary>
+    Task<bool> RequestConsentAsync(ConsentRequest request, TimeSpan timeout, CancellationToken ct = default)
+        => RequestConsentAsync(request.Mode, timeout, ct);
+}
+
+/// <summary>What the consent prompt shows (UI Phase 5): the session mode,
+/// a human name for whoever is asking, and whether the session syncs the
+/// clipboard. An anonymous "a remote operator" prompt trained people to
+/// click Allow blindly; naming the requester is the fix.</summary>
+public sealed class ConsentRequest
+{
+    /// <summary>"View" | "Control" (the runner's normalized mode).</summary>
+    public required string Mode { get; init; }
+    /// <summary>Display label for the requester, e.g. "the operator console".</summary>
+    public required string Requester { get; init; }
+    /// <summary>True when the session can write the device clipboard
+    /// (control sessions; view sessions never get clipboard controls).</summary>
+    public bool Clipboard { get; init; }
+
+    /// <summary>Maps a stream origin (+ the fleet frame's signer role, when
+    /// the session arrives relayed) to the label the prompt shows. Pure —
+    /// unit-tested.</summary>
+    public static string DescribeRequester(string origin, string? fleetSigner) => origin switch
+    {
+        "panel" => "the owner dashboard on this device",
+        "api" => "a direct connection (the EsoAgent app or CLI)",
+        "fleet" when fleetSigner == "owner-panel" => "the fleet owner panel",
+        "fleet" when fleetSigner == "operator" => "the operator console",
+        "fleet" => "the fleet server",
+        _ => "a remote operator",
+    };
+
+    public static ConsentRequest For(string mode, string origin, string? fleetSigner) => new()
+    {
+        Mode = mode,
+        Requester = DescribeRequester(origin, fleetSigner),
+        Clipboard = string.Equals(mode, "Control", StringComparison.OrdinalIgnoreCase),
+    };
 }
 
 /// <summary>One live desktop session. NextFrameAsync returns null to skip an unchanged frame.</summary>

@@ -30,7 +30,11 @@ says otherwise.
   — dispatch is synchronous, so by the time a rollout is visible every
   online device already holds the signed fetch; a cancel flag would
   misreport devices that did update. Not built; see §16.
-- **Phase 5 (host side):** pending.
+- **Phase 5 (host side):** done 2026-11-22 — BUILD-REPORT.md §17. Host
+  window (big code + copy, status, kill switch, update Apply over a new
+  control-pipe action), in-app log viewer replacing the Notepad hand-off,
+  consent v2 (named requester + permission rows, AR/EN), tray language
+  table + toggle. F13 stays 1 click.
 - **Phase 6 (i18n, a11y, verification):** pending.
 
 ---

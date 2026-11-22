@@ -66,7 +66,10 @@ public static class DesktopStreamRunner
         try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None); } catch { }
     }
 
-    public static async Task RunAsync(IDesktopChannel channel, AgentState state, string origin, CancellationToken ct)
+    /// <param name="fleetSigner">For origin "fleet": the verified signer role
+    /// of the stream-open frame ("operator" | "owner-panel"), so the consent
+    /// prompt can name who is asking (Phase 5).</param>
+    public static async Task RunAsync(IDesktopChannel channel, AgentState state, string origin, CancellationToken ct, string? fleetSigner = null)
     {
         var helloJson = await channel.ReceiveTextAsync(ct);
         if (helloJson == null) return;
@@ -104,7 +107,7 @@ public static class DesktopStreamRunner
         {
             var timeout = TimeSpan.FromSeconds(Math.Clamp(state.Config.DesktopPolicy.ConsentTimeoutSeconds, 5, 120));
             var accepted = false;
-            try { accepted = await host.RequestConsentAsync(mode, timeout, ct); }
+            try { accepted = await host.RequestConsentAsync(ConsentRequest.For(mode, origin, fleetSigner), timeout, ct); }
             catch { accepted = false; }
             if (!accepted)
             {

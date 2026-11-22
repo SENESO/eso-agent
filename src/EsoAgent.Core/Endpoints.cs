@@ -786,14 +786,9 @@ public static class Endpoints
         });
         app.MapPost("/api/update/apply-release", async () =>
         {
-            if (state.Release == null) return Results.Json(new { ok = false, message = "release service not running" });
-            var manifest = await state.Release.FetchManifestAsync();
-            if (manifest == null) return Results.Json(new { ok = false, message = "no verifiable manifest (channel disabled or signature invalid)" });
-            if (UpdateGate.Decide(ProductInfo.Version, manifest.Version) != GateDecision.Newer)
-                return Results.Json(new { ok = false, message = $"nothing newer (current {ProductInfo.Version}, manifest {manifest.Version})" });
-            var outcome = await state.Release.DownloadAndApplyAsync(manifest);
-            state.Audit.Write("/api/update/apply-release", $"release v{manifest.Version}: {outcome}", "ok");
-            return Results.Json(new { ok = true, message = outcome, version = manifest.Version });
+            // Shared with the tray's host window via the control pipe (Phase 5).
+            var (ok, message, version) = await ReleaseApply.ApplyAvailableAsync(state);
+            return Results.Json(new { ok, message, version });
         });
     }
 

@@ -12,7 +12,7 @@ namespace EsoAgent.Windows;
 /// tray uses for the owner's kill switch and status display. Locking is a
 /// local act only: this pipe is the ONLY way to lock/unlock the agent, it is
 /// never exposed over the network API.
-/// Protocol: one JSON request line {"action":"lock"|"unlock"|"status"},
+/// Protocol: one JSON request line {"action":"lock"|"unlock"|"status"|"apply-update"},
 /// one JSON reply line, always {"ok":true, ...}.
 /// </summary>
 public sealed class ControlPipeService : BackgroundService
@@ -99,6 +99,24 @@ public sealed class ControlPipeService : BackgroundService
                 _state.KillSwitch.Unlock();
                 _state.Audit.Write("control", "agent resumed from the tray (owner password verified)", "ok");
                 reply["locked"] = false;
+                break;
+            case "apply-update":
+                // The host window's Update button (Phase 5): same shared
+                // path as POST /api/update/apply-release. Local pipe only —
+                // applying an update stays an at-the-device act here; remote
+                // rollout goes through the fleet panel.
+                try
+                {
+                    var (ok, message, version) = await ReleaseApply.ApplyAvailableAsync(_state, ct);
+                    reply["ok"] = ok;
+                    reply["message"] = message;
+                    reply["version"] = version;
+                }
+                catch (Exception ex)
+                {
+                    reply["ok"] = false;
+                    reply["error"] = ex.Message;
+                }
                 break;
             case "status":
                 reply["locked"] = _state.KillSwitch.IsLocked;

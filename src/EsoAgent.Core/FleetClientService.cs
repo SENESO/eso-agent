@@ -591,7 +591,7 @@ public sealed class FleetClientService : BackgroundService
                     session.Channel = channel;
                     await SendAsync(ws, new FleetStreamOpenedFrame { StreamId = open.StreamId, Ok = true }, connectionCt);
                     _state.Audit.Write("fleet/stream", $"relayed desktop stream {open.StreamId} opened (signer {open.Signer})", "ok");
-                    await DesktopStreamRunner.RunAsync(channel, _state, "fleet", session.Cts.Token);
+                    await DesktopStreamRunner.RunAsync(channel, _state, "fleet", session.Cts.Token, open.Signer);
                     break;
                 }
                 case "tunnel":

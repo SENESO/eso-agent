@@ -50,14 +50,30 @@ public sealed class LinuxDesktopHost : IDesktopHost
     /// MUST stay case-insensitive: an exact "control" match here once made
     /// every Control request prompt as VIEW (§13).</summary>
     internal static string ConsentPromptText(string mode)
-        => string.Equals(mode, "Control", StringComparison.OrdinalIgnoreCase)
-            ? "A remote operator is asking to CONTROL this computer. Allow?"
-            : "A remote operator is asking to VIEW this computer's screen. Allow?";
+        => ConsentPromptText(mode, null);
 
-    public async Task<bool> RequestConsentAsync(string mode, TimeSpan timeout, CancellationToken ct = default)
+    /// <summary>Consent v2 (Phase 5): the prompt names the requester when
+    /// the runner provides one, and states the clipboard permission for
+    /// control sessions.</summary>
+    internal static string ConsentPromptText(string mode, string? requester)
+    {
+        var who = string.IsNullOrWhiteSpace(requester) ? "A remote operator" : Capitalize(requester);
+        var text = string.Equals(mode, "Control", StringComparison.OrdinalIgnoreCase)
+            ? $"{who} is asking to CONTROL this computer (screen, mouse, keyboard and clipboard). Allow?"
+            : $"{who} is asking to VIEW this computer's screen. Allow?";
+        return text;
+    }
+
+    private static string Capitalize(string text)
+        => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+
+    public Task<bool> RequestConsentAsync(string mode, TimeSpan timeout, CancellationToken ct = default)
+        => RequestConsentAsync(new ConsentRequest { Mode = mode, Requester = "a remote operator" }, timeout, ct);
+
+    public async Task<bool> RequestConsentAsync(ConsentRequest request, TimeSpan timeout, CancellationToken ct = default)
     {
         var seconds = Math.Clamp((int)timeout.TotalSeconds, 5, 300);
-        var text = ConsentPromptText(mode);
+        var text = ConsentPromptText(request.Mode, request.Requester);
         var zenity = FindTool("zenity");
         if (zenity != null)
         {

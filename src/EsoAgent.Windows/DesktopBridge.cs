@@ -45,7 +45,13 @@ public sealed class TrayDesktopHost : IDesktopHost
 
     /// <summary>Attended-session consent (v1.2): asks the tray to prompt the
     /// local user. Any failure — no tray, timeout, dismissal — is a NO.</summary>
-    public async Task<bool> RequestConsentAsync(string mode, TimeSpan timeout, CancellationToken ct = default)
+    public Task<bool> RequestConsentAsync(string mode, TimeSpan timeout, CancellationToken ct = default)
+        => RequestConsentAsync(new ConsentRequest { Mode = mode, Requester = "a remote operator" }, timeout, ct);
+
+    /// <summary>Consent v2 (Phase 5): the tray prompt also names the
+    /// requester and lists the session's permissions (requester/clipboard
+    /// ride along in the pipe payload; an older tray ignores them).</summary>
+    public async Task<bool> RequestConsentAsync(ConsentRequest request, TimeSpan timeout, CancellationToken ct = default)
     {
         try
         {
@@ -58,8 +64,10 @@ public sealed class TrayDesktopHost : IDesktopHost
             var payload = new JsonObject
             {
                 ["action"] = "consent",
-                ["mode"] = mode,
+                ["mode"] = request.Mode,
                 ["timeoutSeconds"] = Math.Clamp((int)timeout.TotalSeconds, 5, 300),
+                ["requester"] = request.Requester,
+                ["clipboard"] = request.Clipboard,
             };
             await writer.WriteLineAsync(payload.ToJsonString(EsoJson.Options).AsMemory(), timeoutCts.Token);
             var line = await reader.ReadLineAsync(timeoutCts.Token);

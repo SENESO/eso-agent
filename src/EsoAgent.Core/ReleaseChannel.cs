@@ -271,3 +271,28 @@ public sealed class ReleaseUpdateService : BackgroundService
         return ReleaseManifestSigning.Verify(pub, manifest) ? manifest : null;
     }
 }
+
+/// <summary>
+/// The one apply-an-available-update path (UI Phase 5). Until now the logic
+/// lived inline in POST /api/update/apply-release, which the tray's host
+/// window cannot reach (it speaks only the local control pipe). Both now
+/// call this: fetch the signed manifest, gate on the version, download +
+/// verify + apply, audit the outcome.
+/// </summary>
+public static class ReleaseApply
+{
+    public static async Task<(bool Ok, string Message, string? Version)> ApplyAvailableAsync(
+        AgentState state, CancellationToken ct = default)
+    {
+        if (state.Release == null)
+            return (false, "release service not running", null);
+        var manifest = await state.Release.FetchManifestAsync(ct);
+        if (manifest == null)
+            return (false, "no verifiable manifest (channel disabled or signature invalid)", null);
+        if (UpdateGate.Decide(ProductInfo.Version, manifest.Version) != GateDecision.Newer)
+            return (false, $"nothing newer (current {ProductInfo.Version}, manifest {manifest.Version})", manifest.Version);
+        var outcome = await state.Release.DownloadAndApplyAsync(manifest, ct);
+        state.Audit.Write("update/apply", $"release v{manifest.Version}: {outcome}", "ok");
+        return (true, outcome, manifest.Version);
+    }
+}
