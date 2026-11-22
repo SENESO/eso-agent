@@ -361,6 +361,32 @@ public static class FleetOperatorApiV12
         if (!state.Connections.TryGetValue(record.Code, out var conn)) return;
         state.Audit.Write("fleet/stream", $"{open.Kind} stream {open.StreamId} -> {record.Code} (operator)", "ok");
         state.Activity.Add("operator", "stream", $"{open.Kind} stream opened to {record.Name}", "ok", record.Code, record.Name);
-        await StreamRelay.BridgeAsync(state, ws, conn, open, flavor, forwardOpened: true, ctx.RequestAborted);
+        // Live tunnel mirror for the panel (Phase 4): relayed tunnels only —
+        // a tunnel opened directly to a device never passes through here.
+        var isTunnel = expectedKind is "tunnel" or "tunnel-udp";
+        if (isTunnel)
+        {
+            var target = "";
+            try { target = JsonSerializer.Deserialize<TunnelTarget>(open.PayloadJson, EsoJson.Options)?.ToString() ?? ""; }
+            catch { /* the target stays blank rather than blocking the stream */ }
+            state.Tunnels.Open(new ActiveTunnelDto
+            {
+                StreamId = open.StreamId,
+                Code = record.Code,
+                DeviceName = record.Name,
+                Protocol = expectedKind == "tunnel-udp" ? "udp" : "tcp",
+                Target = target,
+                Signer = open.Signer,
+                OpenedAt = DateTimeOffset.UtcNow,
+            });
+        }
+        try
+        {
+            await StreamRelay.BridgeAsync(state, ws, conn, open, flavor, forwardOpened: true, ctx.RequestAborted);
+        }
+        finally
+        {
+            if (isTunnel) state.Tunnels.Close(open.StreamId);
+        }
     }
 }

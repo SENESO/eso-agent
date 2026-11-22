@@ -174,6 +174,8 @@ public sealed class FleetServerState
     public string? OperatorPublicKey { get; private set; }
     public string CertFingerprint { get; set; } = "";
     public System.Collections.Concurrent.ConcurrentDictionary<string, DeviceConnection> Connections { get; } = new();
+    /// <summary>Relayed tunnel streams open right now (live mirror for the panel; never persisted).</summary>
+    public ActiveTunnelStore Tunnels { get; } = new();
 
     public void ReloadOperatorKey()
     {

@@ -16,6 +16,25 @@ says otherwise.
 
 ---
 
+## Phase status (updated 2026-11-22)
+
+- **Phase 0–1 (tokens, web panels):** done — UI-PHASE01-REPORT.md.
+- **Phase 2 (App shell & pairing):** done — UI-PHASE2-REPORT.md.
+- **Phase 3 (session experience):** done — PHASE3-REPORT.md.
+- **Phase 4 (missing-feature UIs):** done 2026-11-22 — BUILD-REPORT.md §16.
+  Updates/rollout screen (fleet panel), Tasks UI (App + fleet panel +
+  agent dashboard, on a new validated schedules write API), Tunnels UI
+  (App manager + fleet panel live mirror), recordings browsers with
+  in-browser/in-App playback (fleet panel, App, agent dashboard).
+  One plan item did not survive contact with the code: **rollout cancel**
+  — dispatch is synchronous, so by the time a rollout is visible every
+  online device already holds the signed fetch; a cancel flag would
+  misreport devices that did update. Not built; see §16.
+- **Phase 5 (host side):** pending.
+- **Phase 6 (i18n, a11y, verification):** pending.
+
+---
+
 ## 1. Current-state inventory (from source)
 
 ### 1.1 Operator desktop App — `src/EsoAgent.App` (Avalonia, FluentTheme, forced Dark)

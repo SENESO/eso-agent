@@ -128,6 +128,15 @@
             <TabItem x:Name="FilesTabItem" Header="Files">
                 <v:FilesView x:Name="FilesTab" />
             </TabItem>
+            <TabItem x:Name="TasksTabItem" Header="Tasks">
+                <v:TasksView x:Name="TasksTab" />
+            </TabItem>
+            <TabItem x:Name="TunnelsTabItem" Header="Tunnels">
+                <v:TunnelsView x:Name="TunnelsTab" />
+            </TabItem>
+            <TabItem x:Name="RecordingsTabItem" Header="Recordings">
+                <v:RecordingsView x:Name="RecordingsTab" />
+            </TabItem>
             <TabItem x:Name="ActivityTabItem" Header="Activity">
                 <v:ActivityView x:Name="ActivityTab" />
             </TabItem>

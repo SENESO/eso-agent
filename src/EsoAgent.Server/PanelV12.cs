@@ -166,6 +166,14 @@ public static class FleetPanelV12
             return Results.Json(state.Rollouts.Get(dto.Id)!.Dto, EsoJson.Options);
         });
 
+        // ----- live relayed tunnels (mirror; tunnels themselves are started
+        // from the operator's app/CLI — they bind ports on that machine) -----
+        app.MapGet("/panel/api/tunnels", (HttpContext ctx) =>
+        {
+            if (Session(ctx) == null) return NeedLogin();
+            return Results.Json(state.Tunnels.List(), EsoJson.Options);
+        });
+
         // ----- wake + exit node -----
         app.MapPost("/panel/api/wake", async (HttpContext ctx) =>
         {

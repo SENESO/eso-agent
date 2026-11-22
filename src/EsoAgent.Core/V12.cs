@@ -226,6 +226,34 @@ public sealed class TunnelTarget
     public override string ToString() => Host.Contains(':') ? $"[{Host}]:{Port}" : $"{Host}:{Port}";
 }
 
+/// <summary>One operator-side tunnel definition (UI overhaul Phase 4): a
+/// local listener on the operator's machine forwarding through one device.
+/// The CLI builds one from its arguments; the App's Tunnels view manages a
+/// list of them. Validation is pure — unit-tested.</summary>
+public sealed class TunnelSpec
+{
+    public int LocalPort { get; set; }
+    /// <summary>Fleet device code, or host[:port] for a direct device.</summary>
+    public string Device { get; set; } = "";
+    /// <summary>Fixed target on the device side; null in SOCKS mode.</summary>
+    public TunnelTarget? Target { get; set; }
+    public bool Socks { get; set; }
+    public bool Udp { get; set; }
+
+    public string Describe() => Socks
+        ? $"SOCKS5 127.0.0.1:{LocalPort} via {Device}"
+        : $"{(Udp ? "UDP" : "TCP")} 127.0.0.1:{LocalPort} → {Target} via {Device}";
+
+    public static string? Validate(TunnelSpec spec)
+    {
+        if (spec.LocalPort is < 1 or > 65535) return "Local port must be 1–65535.";
+        if (string.IsNullOrWhiteSpace(spec.Device)) return "A device is required.";
+        if (spec.Socks && spec.Udp) return "SOCKS forwarding is TCP-only.";
+        if (!spec.Socks && spec.Target == null) return "A target host:port is required (or use SOCKS mode).";
+        return null;
+    }
+}
+
 /// <summary>TCP piping shared by both tunnel ends (agent side + CLI side):
 /// socket → base64 frames out, base64 frames in → socket. Half-close is
 /// propagated as an empty final chunk marker handled by the caller.</summary>
@@ -510,6 +538,41 @@ public static class SchedulePolicy
         if (cfg.IntervalMinutes is { } i) return $"every {i} min";
         if (TryParseDailyAt(cfg.DailyAt, out var at)) return $"daily at {at:hh\\:mm}";
         return "no schedule (set intervalMinutes or dailyAt)";
+    }
+}
+
+/// <summary>Write-path validation for schedules (PUT /api/schedules). Pure —
+/// unit-tested. Returns a human error or null. The rules mirror what
+/// SchedulePolicy can actually run, so the API never accepts a task the
+/// service would silently ignore.</summary>
+public static class ScheduleValidation
+{
+    private static readonly HashSet<string> Shells = new(StringComparer.OrdinalIgnoreCase)
+        { "powershell", "pwsh", "cmd", "bash", "sh" };
+
+    public static string? ValidateOne(ScheduledTaskConfig cfg)
+    {
+        if (string.IsNullOrWhiteSpace(cfg.Name)) return "A schedule needs a name.";
+        if (cfg.Name.Length > 64 || cfg.Name.Any(char.IsControl)) return $"Schedule name '{cfg.Name}' is too long or has control characters.";
+        if (string.IsNullOrWhiteSpace(cfg.Command)) return $"Schedule '{cfg.Name}' needs a command.";
+        if (cfg.Shell != null && !Shells.Contains(cfg.Shell)) return $"Schedule '{cfg.Name}': shell must be one of powershell, pwsh, cmd, bash, sh.";
+        if (cfg.IntervalMinutes is { } i && (i < 1 || i > 10080)) return $"Schedule '{cfg.Name}': interval must be 1–10080 minutes.";
+        if (cfg.DailyAt != null && !SchedulePolicy.TryParseDailyAt(cfg.DailyAt, out _)) return $"Schedule '{cfg.Name}': daily time must be HH:mm.";
+        if (cfg.IntervalMinutes != null && cfg.DailyAt != null) return $"Schedule '{cfg.Name}': pick an interval OR a daily time, not both.";
+        if (cfg.TimeoutMs < 1000 || cfg.TimeoutMs > 3_600_000) return $"Schedule '{cfg.Name}': timeout must be 1 s – 1 h.";
+        return null;
+    }
+
+    public static string? ValidateList(IReadOnlyList<ScheduledTaskConfig> list)
+    {
+        if (list.Count > 100) return "Too many schedules (max 100).";
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cfg in list)
+        {
+            if (ValidateOne(cfg) is { } error) return error;
+            if (!seen.Add(cfg.Name.Trim())) return $"Duplicate schedule name '{cfg.Name}'.";
+        }
+        return null;
     }
 }
 

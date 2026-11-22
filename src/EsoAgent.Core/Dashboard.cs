@@ -23,6 +23,18 @@ public sealed class PolicyUpdateRequest
     public DesktopPolicy? DesktopPolicy { get; set; }
 }
 
+/// <summary>Owner-dashboard schedule write bodies (Phase 4): the whole list
+/// is replaced as one document, exactly like the operator API's PUT.</summary>
+public sealed class SchedulesReplaceRequest
+{
+    public List<ScheduledTaskConfig>? Schedules { get; set; }
+}
+
+public sealed class ScheduleRunRequest
+{
+    public string Name { get; set; } = "";
+}
+
 /// <summary>Request body for the panel's Run page: either a direct exec or a shell script.</summary>
 public sealed class PanelRunRequest
 {
@@ -415,6 +427,47 @@ public static class Dashboard
             File.Delete(full);
             state.Audit.Write("panel/recordings", $"owner deleted recording {name}", "ok");
             return Results.Json(new { deleted = name }, EsoJson.Options);
+        });
+
+        // ----- device scheduled tasks (owner path; same write rules as the API) -----
+        app.MapGet("/panel/api/schedules", (HttpContext ctx) =>
+        {
+            if (Session(ctx) == null) return NeedLogin(ctx);
+            return Results.Json(new
+            {
+                configs = state.Scheduler?.Configs() ?? new List<ScheduledTaskConfig>(),
+                states = state.Scheduler?.Snapshot() ?? new List<ScheduleStateDto>(),
+            }, EsoJson.Options);
+        });
+
+        app.MapPost("/panel/api/schedules", async (HttpContext ctx) =>
+        {
+            var s = Session(ctx); if (s == null) return NeedLogin(ctx);
+            if (!CsrfOk(ctx, s)) return NeedCsrf();
+            if (state.Scheduler == null) return Results.Json(new ErrorResponse { Error = "Schedule service not running." }, EsoJson.Options, statusCode: 503);
+            var body = await ctx.Request.ReadFromJsonAsync<SchedulesReplaceRequest>(EsoJson.Options);
+            if (body?.Schedules == null) return Results.Json(new ErrorResponse { Error = "Bad schedule list." }, EsoJson.Options, statusCode: 400);
+            if (ScheduleValidation.ValidateList(body.Schedules) is { } error)
+                return Results.Json(new ErrorResponse { Error = error }, EsoJson.Options, statusCode: 400);
+            state.Config.Schedules = body.Schedules;
+            state.Scheduler.ReplaceSchedules(body.Schedules);
+            SaveConfig(state);
+            state.Audit.Write("panel/schedules", $"schedules replaced ({body.Schedules.Count} task(s)) from the owner dashboard", "ok");
+            return Results.Json(new { saved = body.Schedules.Count }, EsoJson.Options);
+        });
+
+        app.MapPost("/panel/api/schedules/run", async (HttpContext ctx) =>
+        {
+            var s = Session(ctx); if (s == null) return NeedLogin(ctx);
+            if (!CsrfOk(ctx, s)) return NeedCsrf();
+            if (state.Scheduler == null) return Results.Json(new ErrorResponse { Error = "Schedule service not running." }, EsoJson.Options, statusCode: 503);
+            var body = await ctx.Request.ReadFromJsonAsync<ScheduleRunRequest>(EsoJson.Options);
+            if (body == null || string.IsNullOrWhiteSpace(body.Name))
+                return Results.Json(new ErrorResponse { Error = "Bad run request." }, EsoJson.Options, statusCode: 400);
+            if (!await state.Scheduler.RunNowAsync(body.Name))
+                return Results.Json(new ErrorResponse { Error = $"No idle schedule named '{body.Name}'." }, EsoJson.Options, statusCode: 404);
+            state.Audit.Write("panel/schedules", $"schedule '{body.Name}' run on demand from the owner dashboard", "ok");
+            return Results.Json(new { started = body.Name }, EsoJson.Options);
         });
 
         // Remote desktop (owner path): session-cookie auth, same runner as /api/desktop.

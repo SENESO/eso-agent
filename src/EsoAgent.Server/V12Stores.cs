@@ -281,3 +281,32 @@ public sealed class HealthCache
         lock (_gate) return _byCode.Values.OrderBy(d => d.Code).ToList();
     }
 }
+
+/// <summary>One relayed tunnel stream that is open RIGHT NOW (UI overhaul
+/// Phase 4). Tunnels are ephemeral operator-side listeners; the fleet server
+/// only ever sees the ones relayed through it, so this registry is the live
+/// mirror the panel shows — nothing is persisted.</summary>
+public sealed class ActiveTunnelDto
+{
+    public string StreamId { get; set; } = "";
+    public string Code { get; set; } = "";
+    public string DeviceName { get; set; } = "";
+    /// <summary>tcp | udp</summary>
+    public string Protocol { get; set; } = "tcp";
+    /// <summary>host:port on the device side.</summary>
+    public string Target { get; set; } = "";
+    public string Signer { get; set; } = "";
+    public DateTimeOffset OpenedAt { get; set; }
+}
+
+public sealed class ActiveTunnelStore
+{
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ActiveTunnelDto> _open = new();
+
+    public void Open(ActiveTunnelDto dto) => _open[dto.StreamId] = dto;
+
+    public void Close(string streamId) => _open.TryRemove(streamId, out _);
+
+    public IReadOnlyList<ActiveTunnelDto> List() =>
+        _open.Values.OrderByDescending(t => t.OpenedAt).ToList();
+}

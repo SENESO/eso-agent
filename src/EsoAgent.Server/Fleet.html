@@ -224,6 +224,7 @@ canvas.screen { width: 100%; background: #101216; border: 1px solid var(--line);
   <button data-tab="devices" data-i18n="devices">Devices</button>
   <button data-tab="activity" data-i18n="activity">Activity</button>
   <button data-tab="scripts" data-i18n="scripts">Scripts</button>
+  <button data-tab="updates" data-i18n="updates">Updates</button>
   <button data-tab="mesh" data-i18n="mesh">Mesh</button>
   <button data-tab="audit" data-i18n="audit">Fleet audit</button>
   <button data-tab="access" data-i18n="access">Access</button>
@@ -262,6 +263,25 @@ canvas.screen { width: 100%; background: #101216; border: 1px solid var(--line);
       <th class="sortable" data-sort="state">State</th><th>Groups</th><th class="sortable" data-sort="lastSeen">Last seen</th><th></th>
     </tr></thead><tbody id="devBody"></tbody></table></div>
     <div class="empty" id="devEmpty" style="display:none">No devices match.</div>
+  </section>
+
+  <section id="tab-updates">
+    <div class="cards" style="margin-bottom:var(--sp-3)">
+      <div class="card"><h3 data-i18n="updatePackage">Update package</h3>
+        <div id="upPkgInfo"><p class="mut">Loading…</p></div>
+        <p class="small">One package is staged at a time; uploading replaces it. Devices never trust the package alone: the fetch instruction is signed by this panel and each device verifies the signature and the package SHA-256 before staging anything.</p>
+        <div class="row"><label class="act" style="cursor:pointer">Upload / replace package <input type="file" id="upPkgFile" accept=".zip" style="display:none"></label><span class="small" id="upPkgMsg"></span></div>
+      </div>
+      <div class="card"><h3 data-i18n="newRollout">New rollout</h3>
+        <p class="small">Dispatch is immediate: online devices are told to fetch and apply at once, offline devices are marked offline and are never updated later behind your back. Pick the targets, then start.</p>
+        <div class="row"><button class="act" id="upPickTargets">Choose devices…</button><label class="chk"><input type="checkbox" id="upAll"> All approved devices</label></div>
+        <p class="small" id="upTargetsSummary">No devices chosen.</p>
+        <div class="row"><button class="act primary" id="upStart">Start rollout</button><span class="small" id="upStartMsg"></span></div>
+      </div>
+    </div>
+    <div class="row"><button class="act" id="upRefresh" data-i18n="refresh">Refresh</button><span class="mut" id="upAutoNote"></span></div>
+    <div id="upList"></div>
+    <div class="empty" id="upEmpty" style="display:none">No rollouts yet.</div>
   </section>
 
   <section id="tab-mesh">
@@ -314,9 +334,9 @@ canvas.screen { width: 100%; background: #101216; border: 1px solid var(--line);
         <div class="row"><button class="act primary" id="scSave" data-i18n="save">Save script</button><span class="small" id="scMsg"></span></div>
       </div>
       <div class="card"><h3 data-i18n="runScript">Run a script</h3>
-        <p class="small">Pick a saved script, choose target device codes (comma-separated), run. The run is audit-logged with the script body's SHA-256 and who ran it.</p>
+        <p class="small">Pick a saved script, choose the target devices, run. The run is audit-logged with the script body's SHA-256 and who ran it.</p>
         <div class="row"><select id="scPick" style="flex:1"></select></div>
-        <div class="row"><input id="scTargets" placeholder="Codes, e.g. ABCD-1234, EFGH-5678" style="flex:1"></div>
+        <div class="row"><button class="act" id="scPickTargets">Choose devices…</button><span class="small" id="scTargetsSummary">No devices chosen.</span></div>
         <div class="row"><button class="act primary" id="scRun">Run</button></div>
         <div id="scOut" style="display:none"></div>
       </div>
@@ -335,6 +355,9 @@ canvas.screen { width: 100%; background: #101216; border: 1px solid var(--line);
       <button class="act dv-sub active" data-sub="status" data-i18n="status">Status</button>
       <button class="act dv-sub" data-sub="desktop" data-i18n="desktop">Desktop</button>
       <button class="act dv-sub" data-sub="files" data-i18n="files">Files</button>
+      <button class="act dv-sub" data-sub="tasks" data-i18n="tasks">Tasks</button>
+      <button class="act dv-sub" data-sub="tunnels" data-i18n="tunnels">Tunnels</button>
+      <button class="act dv-sub" data-sub="recordings" data-i18n="recordings">Recordings</button>
       <button class="act dv-sub" data-sub="activity" data-i18n="activity">Activity</button>
     </div>
 
@@ -377,6 +400,45 @@ canvas.screen { width: 100%; background: #101216; border: 1px solid var(--line);
       </div>
       <div class="mut" id="dvFileMsg"></div>
       <div class="tablewrap"><table><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="dvFileBody"></tbody></table></div>
+    </div>
+
+    <div id="dv-tasks" style="display:none">
+      <div class="row">
+        <button class="act primary" id="dvTaskNew">New task…</button>
+        <button class="act" id="dvTaskRefresh" data-i18n="refresh">Refresh</button>
+        <span class="mut">The device's own scheduled tasks — they run on the device, on its clock, whether or not anyone is connected.</span>
+      </div>
+      <div class="mut" id="dvTaskMsg"></div>
+      <div class="tablewrap"><table><thead><tr><th>Name</th><th>Schedule</th><th>Command</th><th>Last run</th><th>Result</th><th>On</th><th></th></tr></thead><tbody id="dvTaskBody"></tbody></table></div>
+      <div class="empty" id="dvTaskEmpty" style="display:none">No scheduled tasks on this device.</div>
+    </div>
+
+    <div id="dv-tunnels" style="display:none">
+      <div class="row">
+        <button class="act" id="dvTunnelRefresh" data-i18n="refresh">Refresh</button>
+        <span class="mut">Tunnels bind a port on the operator's own machine, so they are started from the EsoAgent app or CLI. This list mirrors the tunnels relayed through this fleet server that are open right now; a tunnel opened directly to a device never passes through here.</span>
+      </div>
+      <div class="tablewrap"><table><thead><tr><th>Protocol</th><th>Target on device</th><th>Opened</th><th>By</th></tr></thead><tbody id="dvTunnelBody"></tbody></table></div>
+      <div class="empty" id="dvTunnelEmpty" style="display:none">No tunnels to this device are open right now.</div>
+    </div>
+
+    <div id="dv-recordings" style="display:none">
+      <div class="row">
+        <button class="act" id="dvRecRefresh" data-i18n="refresh">Refresh</button>
+        <span class="mut">Desktop sessions recorded on this device (.esorec). Playback happens in your browser — the file is fetched from the device when you press Play.</span>
+      </div>
+      <div class="mut" id="dvRecMsg"></div>
+      <div id="dvPlayer" style="display:none;margin-bottom:var(--sp-3)">
+        <canvas id="dvPlayerCanvas" class="screen" width="960" height="540"></canvas>
+        <div class="row" style="margin-top:var(--sp-2)">
+          <button class="act primary" id="dvPlayerPlay">Pause</button>
+          <input type="range" id="dvPlayerSeek" min="0" max="0" value="0" style="flex:1">
+          <span class="mut" id="dvPlayerTime">0:00 / 0:00</span>
+          <button class="act" id="dvPlayerClose">Close player</button>
+        </div>
+      </div>
+      <div class="tablewrap"><table><thead><tr><th>Recording</th><th>Started</th><th>Size</th><th>Format</th><th></th></tr></thead><tbody id="dvRecBody"></tbody></table></div>
+      <div class="empty" id="dvRecEmpty" style="display:none">No recordings on this device.</div>
     </div>
 
     <div id="dv-activity" style="display:none">
@@ -612,7 +674,7 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('main section').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
   $('tab-' + b.dataset.tab).classList.add('active');
-  ({overview: loadOverview, devices: loadDevices, audit: loadAudit, access: loadAccess, mesh: loadMesh, activity: loadActivity, scripts: loadScripts}[b.dataset.tab] || (()=>{}))();
+  ({overview: loadOverview, devices: loadDevices, audit: loadAudit, access: loadAccess, mesh: loadMesh, activity: loadActivity, scripts: loadScripts, updates: loadUpdates}[b.dataset.tab] || (()=>{}))();
 });
 
 // ----- shared activity rendering (fleet timeline, overview, device page) -----
@@ -896,8 +958,8 @@ $('ekCreate').onclick = async () => {
 
 // ----- i18n (EN/AR, RTL for Arabic) -----
 const I18N = {
-  en: { fleetTitle: 'EsoAgent Fleet', signOut: 'Sign out', overview: 'Overview', devices: 'Devices', activity: 'Activity', scripts: 'Scripts', mesh: 'Mesh', audit: 'Fleet audit', access: 'Access', refresh: 'Refresh', addScript: 'Add / edit script', runScript: 'Run a script', save: 'Save script', back: '← All devices', status: 'Status', desktop: 'Desktop', files: 'Files', searchDevices: 'Search code, name, OS, group…' },
-  ar: { fleetTitle: 'أسطول EsoAgent', signOut: 'تسجيل الخروج', overview: 'نظرة عامة', devices: 'الأجهزة', activity: 'النشاط', scripts: 'البرامج النصية', mesh: 'الشبكة', audit: 'سجل الأسطول', access: 'الوصول', refresh: 'تحديث', addScript: 'إضافة / تعديل برنامج', runScript: 'تشغيل برنامج', save: 'حفظ البرنامج', back: '→ كل الأجهزة', status: 'الحالة', desktop: 'سطح المكتب', files: 'الملفات', searchDevices: 'ابحث بالكود أو الاسم أو النظام أو المجموعة…' },
+  en: { fleetTitle: 'EsoAgent Fleet', signOut: 'Sign out', overview: 'Overview', devices: 'Devices', activity: 'Activity', scripts: 'Scripts', mesh: 'Mesh', audit: 'Fleet audit', access: 'Access', refresh: 'Refresh', addScript: 'Add / edit script', runScript: 'Run a script', save: 'Save script', back: '← All devices', status: 'Status', desktop: 'Desktop', files: 'Files', searchDevices: 'Search code, name, OS, group…', updates: 'Updates', updatePackage: 'Update package', newRollout: 'New rollout', tasks: 'Tasks', tunnels: 'Tunnels', recordings: 'Recordings' },
+  ar: { fleetTitle: 'أسطول EsoAgent', signOut: 'تسجيل الخروج', overview: 'نظرة عامة', devices: 'الأجهزة', activity: 'النشاط', scripts: 'البرامج النصية', mesh: 'الشبكة', audit: 'سجل الأسطول', access: 'الوصول', refresh: 'تحديث', addScript: 'إضافة / تعديل برنامج', runScript: 'تشغيل برنامج', save: 'حفظ البرنامج', back: '→ كل الأجهزة', status: 'الحالة', desktop: 'سطح المكتب', files: 'الملفات', searchDevices: 'ابحث بالكود أو الاسم أو النظام أو المجموعة…', updates: 'التحديثات', updatePackage: 'حزمة التحديث', newRollout: 'نشر جديد', tasks: 'المهام', tunnels: 'الأنفاق', recordings: 'التسجيلات' },
 };
 let lang = localStorage.getItem('eso-lang') || 'en';
 function applyLang() {
@@ -957,10 +1019,28 @@ $('scSave').onclick = async () => {
   $('scMsg').textContent = r.error ? ('Failed: ' + r.error) : 'Saved ✓';
   loadScripts();
 };
+// ----- device multi-picker (scripts + rollouts share it) -----
+let scTargetCodes = [];
+async function pickDevices(title, preselected) {
+  const approved = devices.filter(d => d.state === 'Approved');
+  if (!approved.length) { esoToast('No approved devices yet.', 'bad'); return null; }
+  const r = await esoDialog({
+    title,
+    fields: [{id: 'codes', type: 'checks', options: approved.map(d => ({value: d.code, label: d.code + ' — ' + d.name + (d.online ? '' : ' (offline)'), checked: (preselected || []).includes(d.code)}))}],
+    actions: [{id: 'no', label: 'Cancel'}, {id: 'yes', label: 'Use these devices', kind: 'primary'}],
+  });
+  return r && r.action === 'yes' ? r.values.codes : null;
+}
+$('scPickTargets').onclick = async () => {
+  const picked = await pickDevices('Run on which devices?', scTargetCodes);
+  if (picked === null) return;
+  scTargetCodes = picked;
+  $('scTargetsSummary').textContent = picked.length ? picked.join(', ') : 'No devices chosen.';
+};
 $('scRun').onclick = async () => {
   const id = $('scPick').value; if (!id) return;
-  const targets = $('scTargets').value.split(',').map(x => x.trim()).filter(Boolean);
-  if (!targets.length) { esoToast('Enter at least one device code.', 'bad'); return; }
+  const targets = scTargetCodes;
+  if (!targets.length) { esoToast('Choose at least one device first.', 'bad'); return; }
   const out = $('scOut'); out.style.display = 'block'; out.innerHTML = '<p class="mut">Running…</p>';
   const r = await api('/panel/api/scripts/' + id + '/run', {method: 'POST', json: {targets}});
   out.innerHTML = '';
@@ -1040,8 +1120,11 @@ $('dvBack').onclick = () => {
 $('dvDesktopCta').onclick = () => dvShowSub('desktop');
 function dvShowSub(name) {
   document.querySelectorAll('.dv-sub').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
-  ['status', 'desktop', 'files', 'activity'].forEach(n => $('dv-' + n).style.display = n === name ? 'block' : 'none');
+  ['status', 'desktop', 'files', 'tasks', 'tunnels', 'recordings', 'activity'].forEach(n => $('dv-' + n).style.display = n === name ? 'block' : 'none');
   if (name === 'activity') loadDvActivity();
+  if (name === 'tasks') loadDvTasks();
+  if (name === 'tunnels') loadDvTunnels();
+  if (name === 'recordings') loadDvRecordings();
   if (name === 'desktop' && !fdWs) fdStartSession();
 }
 document.querySelectorAll('.dv-sub').forEach(b => b.onclick = () => dvShowSub(b.dataset.sub));
@@ -1244,6 +1327,307 @@ fdCanvas.addEventListener('wheel', ev => { ev.preventDefault(); fdSend({type: 'i
 fdCanvas.addEventListener('contextmenu', ev => ev.preventDefault());
 fdCanvas.addEventListener('keydown', ev => { ev.preventDefault(); fdSend({type: 'input', kind: 'key', key: ev.key, down: true, ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}); });
 fdCanvas.addEventListener('keyup', ev => { ev.preventDefault(); fdSend({type: 'input', kind: 'key', key: ev.key, down: false, ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}); });
+
+// ----- updates & rollouts (fleet section) -----
+let upTargetCodes = [];
+let upTimer = null;
+function rolloutBadge(state) {
+  if (state === 'applied') return '<span class="badge on"><span class="dot"></span>applied</span>';
+  if (state === 'failed') return '<span class="badge bad"><span class="dot"></span>failed</span>';
+  if (state === 'offline') return '<span class="badge off"><span class="dot"></span>offline</span>';
+  return '<span class="badge pend"><span class="dot"></span>' + esc(state) + '</span>';
+}
+async function loadUpdates() {
+  const pkg = await api('/panel/api/update/package').catch(() => null);
+  if (!pkg || pkg.error) {
+    $('upPkgInfo').innerHTML = '<p class="mut">No update package is staged. Upload one to start a rollout.</p>';
+  } else {
+    $('upPkgInfo').innerHTML = `<p style="margin:0 0 var(--sp-1)"><b>${fmtBytes(pkg.size)}</b> · uploaded <span class="num">${fmtTime(pkg.uploadedAt)}</span> by ${esc(pkg.uploadedBy)}</p>
+      <p class="small" style="margin:0">SHA-256 <code>${esc(pkg.sha256.slice(0, 16))}…</code></p>`;
+  }
+  const rollouts = await api('/panel/api/rollout').catch(() => []);
+  $('upEmpty').style.display = (rollouts || []).length ? 'none' : 'block';
+  $('upList').innerHTML = (rollouts || []).map(r => `<div class="card" style="margin-bottom:var(--sp-3)">
+    <div class="row" style="margin-bottom:var(--sp-2)"><b>Rollout <code>${esc(r.id)}</code></b><span class="mut">started <span class="num">${fmtTime(r.createdAt)}</span> by ${esc(r.createdBy)} · package <code>${esc((r.packageSha256 || '').slice(0, 12))}…</code></span></div>
+    <div class="tablewrap"><table><thead><tr><th>Device</th><th>State</th><th>Version</th><th>Detail</th><th>Updated</th></tr></thead><tbody>
+    ${r.devices.map(d => `<tr><td><code>${esc(d.code)}</code></td><td>${rolloutBadge(d.state)}</td>
+      <td class="num">${esc(d.fromVersion || '?')} → ${esc(d.toVersion || '—')}</td>
+      <td>${esc(d.error || '')}</td><td class="num">${fmtTime(d.updatedAt)}</td></tr>`).join('')}
+    </tbody></table></div></div>`).join('');
+  const inFlight = (rollouts || []).some(r => r.devices.some(d => ['queued', 'sent', 'applying'].includes(d.state)));
+  $('upAutoNote').textContent = inFlight ? 'Auto-refreshing while a rollout is in flight…' : '';
+  clearTimeout(upTimer);
+  if (inFlight && $('tab-updates').classList.contains('active')) upTimer = setTimeout(loadUpdates, 4000);
+}
+$('upRefresh').onclick = loadUpdates;
+$('upPkgFile').onchange = async ev => {
+  const file = ev.target.files[0]; ev.target.value = '';
+  if (!file) return;
+  $('upPkgMsg').textContent = 'Uploading ' + file.name + '…';
+  const r = await fetch('/panel/api/update/package', {method: 'POST', headers: {'X-CSRF': CSRF}, body: file});
+  const j = await r.json().catch(() => ({}));
+  $('upPkgMsg').textContent = r.ok ? 'Staged ✓ SHA-256 ' + (j.sha256 || '').slice(0, 12) + '…' : 'Failed: ' + (j.error || r.status);
+  loadUpdates();
+};
+$('upPickTargets').onclick = async () => {
+  const picked = await pickDevices('Roll out to which devices?', upTargetCodes);
+  if (picked === null) return;
+  upTargetCodes = picked;
+  $('upAll').checked = false;
+  $('upTargetsSummary').textContent = picked.length ? picked.join(', ') : 'No devices chosen.';
+};
+$('upAll').onchange = () => { $('upTargetsSummary').textContent = $('upAll').checked ? 'All approved devices.' : (upTargetCodes.length ? upTargetCodes.join(', ') : 'No devices chosen.'); };
+$('upStart').onclick = async () => {
+  const targets = $('upAll').checked ? {all: true} : {codes: upTargetCodes};
+  if (!targets.all && !targets.codes.length) { esoToast('Choose target devices first.', 'bad'); return; }
+  $('upStartMsg').textContent = 'Starting…';
+  const r = await api('/panel/api/rollout', {method: 'POST', json: {targets}});
+  $('upStartMsg').textContent = r.error ? 'Failed: ' + r.error : 'Rollout ' + r.id + ' started ✓';
+  loadUpdates();
+};
+
+// ----- device tasks (the device's own scheduled tasks) -----
+let dvTaskConfigs = [];
+async function loadDvTasks() {
+  if (!dvCode) return;
+  const [cfgR, stR] = await Promise.all([
+    devCommand('GET', '/api/schedules/config'),
+    devCommand('GET', '/api/schedules'),
+  ]);
+  if (cfgR.error || !Array.isArray(cfgR.body)) { $('dvTaskMsg').textContent = 'Tasks failed to load: ' + (cfgR.error || 'no reply (device may predate the schedules API)'); return; }
+  $('dvTaskMsg').textContent = '';
+  dvTaskConfigs = cfgR.body;
+  const states = {};
+  (Array.isArray(stR.body) ? stR.body : []).forEach(s => states[s.name] = s);
+  $('dvTaskEmpty').style.display = dvTaskConfigs.length ? 'none' : 'block';
+  $('dvTaskBody').innerHTML = dvTaskConfigs.map(c => {
+    const s = states[c.name] || {};
+    const result = s.lastError ? '<span class="badge bad"><span class="dot"></span>' + esc(s.lastError) + '</span>'
+      : s.lastExitCode != null ? (s.lastExitCode === 0 ? '<span class="badge on"><span class="dot"></span>exit 0</span>' : '<span class="badge bad"><span class="dot"></span>exit ' + s.lastExitCode + '</span>') : '—';
+    return `<tr><td><b>${esc(c.name)}</b></td>
+      <td>${esc(s.description || (c.intervalMinutes ? 'every ' + c.intervalMinutes + ' min' : c.dailyAt ? 'daily at ' + c.dailyAt : '—'))}</td>
+      <td><code>${esc(c.shell ? '[' + c.shell + '] ' : '')}${esc(c.command)}</code></td>
+      <td class="num">${s.lastRunAt ? fmtTime(s.lastRunAt) : 'never'}</td>
+      <td>${result}</td>
+      <td>${c.enabled ? '<span class="badge on"><span class="dot"></span>on</span>' : '<span class="badge off">off</span>'}</td>
+      <td><button class="act" onclick="dvTaskRun('${esc(c.name)}')">Run now</button>
+          <button class="act" onclick="dvTaskEdit('${esc(c.name)}')">Edit</button>
+          <button class="act danger" onclick="dvTaskDelete('${esc(c.name)}')">Delete</button></td></tr>`;
+  }).join('');
+}
+async function dvTaskSave(list, okMsg) {
+  const r = await devCommand('PUT', '/api/schedules', list);
+  if (r.error) { esoToast('Save failed: ' + r.error, 'bad'); return false; }
+  esoToast(okMsg, 'ok');
+  loadDvTasks();
+  return true;
+}
+async function dvTaskForm(existing) {
+  const isNew = !existing;
+  const c = existing || {name: '', enabled: true, shell: null, command: '', intervalMinutes: 60, dailyAt: null, timeoutMs: 600000};
+  const kind0 = c.dailyAt ? 'daily' : 'interval';
+  const r = await esoDialog({
+    title: (isNew ? 'New scheduled task' : 'Edit task — ' + c.name) + ' · ' + dvCode,
+    fields: [
+      ...(isNew ? [{id: 'name', label: 'Name', value: ''}] : []),
+      {id: 'shell', label: 'Run with', type: 'select', value: c.shell || '', options: [
+        {value: '', label: 'Program directly (command is the executable)'},
+        {value: 'powershell', label: 'PowerShell'}, {value: 'pwsh', label: 'pwsh'}, {value: 'cmd', label: 'cmd.exe'},
+        {value: 'bash', label: 'bash'}, {value: 'sh', label: 'sh'}]},
+      {id: 'command', label: 'Command', type: 'textarea', value: c.command || ''},
+      {id: 'kind', label: 'Schedule', type: 'select', value: kind0, options: [
+        {value: 'interval', label: 'Every N minutes'}, {value: 'daily', label: 'Daily at a time'}]},
+      {id: 'interval', label: 'Interval (minutes)', type: 'number', value: c.intervalMinutes ?? 60},
+      {id: 'daily', label: 'Daily at (HH:mm, device local time)', value: c.dailyAt || '07:30'},
+      {id: 'enabled', type: 'checks', options: [{value: 'on', label: 'Enabled', checked: c.enabled !== false}]},
+    ],
+    validate: v => {
+      if (isNew && !v.name.trim()) return 'A name is required.';
+      if (!v.command.trim()) return 'A command is required.';
+      if (v.kind === 'interval' && !(parseInt(v.interval, 10) >= 1 && parseInt(v.interval, 10) <= 10080)) return 'Interval must be 1–10080 minutes.';
+      if (v.kind === 'daily' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v.daily.trim())) return 'Daily time must be HH:mm.';
+      return '';
+    },
+    actions: [{id: 'no', label: 'Cancel'}, {id: 'yes', label: isNew ? 'Create task' : 'Save task', kind: 'primary'}],
+  });
+  if (!r || r.action !== 'yes') return;
+  const v = r.values;
+  const built = Object.assign({}, c, {
+    name: isNew ? v.name.trim() : c.name,
+    enabled: (v.enabled || []).includes('on'),
+    shell: v.shell || null,
+    command: v.command.trim(),
+    intervalMinutes: v.kind === 'interval' ? parseInt(v.interval, 10) : null,
+    dailyAt: v.kind === 'daily' ? v.daily.trim() : null,
+  });
+  const list = isNew ? [...dvTaskConfigs, built] : dvTaskConfigs.map(x => x.name === c.name ? built : x);
+  dvTaskSave(list, isNew ? 'Task created ✓' : 'Task saved ✓');
+}
+window.dvTaskEdit = name => dvTaskForm(dvTaskConfigs.find(x => x.name === name));
+window.dvTaskDelete = async name => {
+  if (!await esoConfirm('Delete task', 'Delete the scheduled task "' + name + '" on ' + dvCode + '? It stops running from the next tick.', 'Delete', true)) return;
+  dvTaskSave(dvTaskConfigs.filter(x => x.name !== name), 'Task deleted ✓');
+};
+window.dvTaskRun = async name => {
+  const r = await devCommand('POST', '/api/schedules/' + encodeURIComponent(name) + '/run');
+  esoToast(r.error ? 'Run failed: ' + r.error : 'Task "' + name + '" started ✓', r.error ? 'bad' : 'ok');
+  setTimeout(loadDvTasks, 2000);
+};
+$('dvTaskNew').onclick = () => dvTaskForm(null);
+$('dvTaskRefresh').onclick = loadDvTasks;
+
+// ----- device tunnels (live mirror of relayed tunnels) -----
+async function loadDvTunnels() {
+  if (!dvCode) return;
+  const all = await api('/panel/api/tunnels').catch(() => []);
+  const mine = (all || []).filter(t => t.code === dvCode);
+  $('dvTunnelEmpty').style.display = mine.length ? 'none' : 'block';
+  $('dvTunnelBody').innerHTML = mine.map(t => `<tr>
+    <td>${esc(t.protocol.toUpperCase())}</td><td><code>${esc(t.target)}</code></td>
+    <td class="num">${fmtTime(t.openedAt)}</td><td>${esc(t.signer)}</td></tr>`).join('');
+}
+$('dvTunnelRefresh').onclick = loadDvTunnels;
+
+// ----- device recordings (list + in-browser player) -----
+async function loadDvRecordings() {
+  if (!dvCode) return;
+  recStop();
+  const r = await devCommand('GET', '/api/recordings');
+  if (r.error || !Array.isArray(r.body)) { $('dvRecMsg').textContent = 'Recordings failed to load: ' + (r.error || 'no reply'); return; }
+  $('dvRecMsg').textContent = '';
+  const list = r.body;
+  $('dvRecEmpty').style.display = list.length ? 'none' : 'block';
+  $('dvRecBody').innerHTML = list.map(x => `<tr>
+    <td><code>${esc(x.name)}</code></td>
+    <td class="num">${fmtTime(x.startedAt)}</td>
+    <td class="num">${fmtBytes(x.sizeBytes)}</td>
+    <td>${esc(x.codec || '')} ${x.width ? x.width + '×' + x.height : ''}</td>
+    <td><button class="act primary" onclick="dvRecPlay('${esc(x.name)}')">Play</button>
+        <button class="act" onclick="dvRecDownload('${esc(x.name)}')">Download</button>
+        <button class="act danger" onclick="dvRecDelete('${esc(x.name)}')">Delete</button></td></tr>`).join('');
+}
+async function dvRecFetch(name) {
+  const r = await devCommand('GET', '/api/recordings/' + encodeURIComponent(name));
+  if (r.error || typeof r.body !== 'string') throw new Error(r.error || 'unexpected reply');
+  return r.body;
+}
+window.dvRecDownload = async name => {
+  try {
+    const text = await dvRecFetch(name);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], {type: 'application/octet-stream'}));
+    a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { esoToast('Download failed: ' + e.message, 'bad'); }
+};
+window.dvRecDelete = async name => {
+  if (!await esoConfirm('Delete recording', 'Delete "' + name + '" on ' + dvCode + '? This cannot be undone.', 'Delete', true)) return;
+  const r = await devCommand('DELETE', '/api/recordings/' + encodeURIComponent(name));
+  esoToast(r.error ? 'Delete failed: ' + r.error : 'Recording deleted ✓', r.error ? 'bad' : 'ok');
+  loadDvRecordings();
+};
+$('dvRecRefresh').onclick = loadDvRecordings;
+
+// .esorec player: JSONL frames {atMs, codec, full, data}; jpeg draws directly,
+// rawdiff composites tile diffs onto an offscreen canvas (same wire format as
+// the live desktop view). Seeking restarts from the last full frame.
+const recCanvas = $('dvPlayerCanvas'), recCtx = recCanvas.getContext('2d');
+let recFrames = [], recIdx = -1, recRendered = -1, recPlaying = false, recTimer = null, recOff = null, recOffCtx = null, recStartWall = 0;
+function recFmtMs(ms) { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+async function recDrawRaw(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const dv = new DataView(bytes.buffer);
+  const w = dv.getUint16(3, true), h = dv.getUint16(5, true), tile = dv.getUint16(7, true), count = dv.getUint32(9, true);
+  if (!recOff || recOff.width !== w || recOff.height !== h) { recOff = document.createElement('canvas'); recOff.width = w; recOff.height = h; recOffCtx = recOff.getContext('2d'); }
+  const inflated = await new Response(new Blob([bytes.slice(13)]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer();
+  const data = new Uint8Array(inflated);
+  const cols = Math.ceil(w / tile);
+  let pos = 0;
+  for (let t = 0; t < count; t++) {
+    const idx = new DataView(data.buffer, data.byteOffset + pos, 4).getUint32(0, true); pos += 4;
+    const tx = (idx % cols) * tile, ty = Math.floor(idx / cols) * tile;
+    const tw = Math.min(tile, w - tx), th = Math.min(tile, h - ty);
+    const img = recOffCtx.createImageData(tw, th);
+    for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+      const s2 = pos + (y * tw + x) * 4, d2 = (y * tw + x) * 4;
+      img.data[d2] = data[s2 + 2]; img.data[d2 + 1] = data[s2 + 1]; img.data[d2 + 2] = data[s2]; img.data[d2 + 3] = 255;
+    }
+    pos += tw * th * 4;
+    recOffCtx.putImageData(img, tx, ty);
+  }
+  if (recCanvas.width !== w) { recCanvas.width = w; recCanvas.height = h; }
+  recCtx.drawImage(recOff, 0, 0);
+}
+async function recRender(i) {
+  if (i < 0 || i >= recFrames.length) return;
+  let from = i;
+  if (recRendered < i && recFrames[i].codec !== 'rawdiff') from = i;
+  else if (recRendered < i && recRendered >= 0 && i - recRendered <= 90) from = recRendered + 1;
+  else { from = i; while (from > 0 && !recFrames[from].full) from--; recRendered = from - 1; }
+  for (let k = from; k <= i; k++) {
+    const f = recFrames[k];
+    if (f.codec === 'jpeg') {
+      const bin = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
+      const bmp = await createImageBitmap(new Blob([bin], {type: 'image/jpeg'}));
+      if (recCanvas.width !== bmp.width) { recCanvas.width = bmp.width; recCanvas.height = bmp.height; }
+      recCtx.drawImage(bmp, 0, 0); bmp.close();
+    } else { await recDrawRaw(f.data); }
+    recRendered = k;
+  }
+  recIdx = i;
+  $('dvPlayerSeek').value = i;
+  $('dvPlayerTime').textContent = recFmtMs(recFrames[i].atMs) + ' / ' + recFmtMs(recFrames[recFrames.length - 1].atMs);
+}
+function recTick() {
+  if (!recPlaying) return;
+  const elapsed = recFrames[0].atMs + (performance.now() - recStartWall);
+  let next = recIdx;
+  while (next + 1 < recFrames.length && recFrames[next + 1].atMs <= elapsed) next++;
+  if (next !== recIdx) recRender(next);
+  if (recIdx >= recFrames.length - 1) { recPlaying = false; $('dvPlayerPlay').textContent = 'Play'; return; }
+  recTimer = setTimeout(recTick, 40);
+}
+function recStop() {
+  recPlaying = false;
+  clearTimeout(recTimer);
+  recFrames = []; recIdx = -1; recRendered = -1;
+  $('dvPlayer').style.display = 'none';
+}
+window.dvRecPlay = async name => {
+  try {
+    $('dvRecMsg').textContent = 'Fetching ' + name + '…';
+    const text = await dvRecFetch(name);
+    const lines = text.split('\n').filter(l => l.trim());
+    recFrames = lines.slice(1).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    if (!recFrames.length) { esoToast('That recording has no playable frames.', 'bad'); return; }
+    $('dvRecMsg').textContent = '';
+    $('dvPlayer').style.display = 'block';
+    $('dvPlayerSeek').max = recFrames.length - 1;
+    recRendered = -1;
+    await recRender(0);
+    recPlaying = true;
+    $('dvPlayerPlay').textContent = 'Pause';
+    recStartWall = performance.now() - (recFrames[recIdx].atMs - recFrames[0].atMs);
+    recTick();
+    $('dvPlayer').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  } catch (e) { esoToast('Playback failed: ' + e.message, 'bad'); }
+};
+$('dvPlayerPlay').onclick = () => {
+  if (!recFrames.length) return;
+  recPlaying = !recPlaying;
+  $('dvPlayerPlay').textContent = recPlaying ? 'Pause' : 'Play';
+  if (recPlaying) {
+    if (recIdx >= recFrames.length - 1) { recRendered = -1; recRender(0); }
+    recStartWall = performance.now() - (recFrames[recIdx].atMs - recFrames[0].atMs);
+    recTick();
+  } else clearTimeout(recTimer);
+};
+$('dvPlayerSeek').oninput = async () => {
+  recPlaying = false; clearTimeout(recTimer);
+  $('dvPlayerPlay').textContent = 'Play';
+  await recRender(parseInt($('dvPlayerSeek').value, 10));
+};
+$('dvPlayerClose').onclick = recStop;
 
 (async () => {
   const s = await api('/panel/api/session');

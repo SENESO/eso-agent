@@ -192,6 +192,9 @@ public sealed partial class MainWindow : Window
         DesktopTabItem.Header = Strings.T("Desktop");
         TerminalTabItem.Header = Strings.T("Terminal");
         FilesTabItem.Header = Strings.T("Files");
+        TasksTabItem.Header = Strings.T("Tasks");
+        TunnelsTabItem.Header = Strings.T("Tunnels");
+        RecordingsTabItem.Header = Strings.T("Recordings");
         ActivityTabItem.Header = Strings.T("Activity");
         AccessTabItem.Header = Strings.T("Access");
         PairButton.Content = Strings.T("PairDevice");
@@ -209,6 +212,9 @@ public sealed partial class MainWindow : Window
         DesktopTab.ApplyLanguage();
         TerminalTab.ApplyLanguage();
         ActivityTab.ApplyLanguage();
+        TasksTab.ApplyLanguage();
+        TunnelsTab.ApplyLanguage();
+        RecordingsTab.ApplyLanguage();
         UpdateGroupFilter();
         UpdateIdentityCard();
         if (_allDevices.Count > 0) ApplyDeviceFilter();   // re-render rows so their action labels follow the language
@@ -360,6 +366,9 @@ public sealed partial class MainWindow : Window
         TerminalTab.Attach(_cfg, device);
         DesktopTab.Attach(_cfg, device);
         FilesTab.Attach(_cfg, device);
+        TasksTab.Attach(_cfg, device);
+        TunnelsTab.Attach(_cfg, device);
+        RecordingsTab.Attach(_cfg, device);
         ActivityTab.Attach(_cfg, device);
         AccessTab.Attach(_cfg, device);
         OpenBrowserButton.IsEnabled = true;

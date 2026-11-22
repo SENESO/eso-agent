@@ -328,9 +328,38 @@ public static class Endpoints
             catch (Exception ex) { return Bad(ex.Message); }
         });
 
-        // ----- device scheduled tasks (v1.2) -----
+        // ----- device scheduled tasks (v1.2; write path added with the UI overhaul) -----
         app.MapGet("/api/schedules", () =>
             Results.Json(state.Scheduler?.Snapshot() ?? new List<ScheduleStateDto>(), EsoJson.Options));
+
+        app.MapGet("/api/schedules/config", () =>
+            Results.Json(state.Scheduler?.Configs() ?? new List<ScheduledTaskConfig>(), EsoJson.Options));
+
+        // Replace the whole set: the Tasks UIs edit the list as one document.
+        // Validated by ScheduleValidation, persisted to esoagent.json like the
+        // owner policy, and applied live — no agent restart.
+        app.MapPut("/api/schedules", async (HttpRequest req) =>
+        {
+            if (state.Scheduler == null) return Bad("schedule service not running");
+            var list = await req.ReadFromJsonAsync<List<ScheduledTaskConfig>>(EsoJson.Options);
+            if (list == null) return Bad("Bad schedule list.");
+            if (ScheduleValidation.ValidateList(list) is { } error) return Bad(error);
+            state.Config.Schedules = list;
+            state.Scheduler.ReplaceSchedules(list);
+            Dashboard.SaveConfig(state);
+            state.Audit.Write("/api/schedules", $"schedules replaced ({list.Count} task(s)) via API", "ok");
+            return Results.Json(state.Scheduler.Snapshot(), EsoJson.Options);
+        });
+
+        app.MapPost("/api/schedules/{name}/run", async (string name) =>
+        {
+            if (state.Scheduler == null) return Bad("schedule service not running");
+            var started = await state.Scheduler.RunNowAsync(name);
+            if (!started)
+                return Results.Json(new ErrorResponse { Error = $"No idle schedule named '{name}'." }, EsoJson.Options, statusCode: 404);
+            state.Audit.Write("/api/schedules", $"schedule '{name}' run on demand via API", "ok");
+            return Results.Json(new { started = name }, EsoJson.Options);
+        });
 
         // ----- OS patch management (v1.2) -----
         app.MapGet("/api/patch", async (HttpRequest req) =>
