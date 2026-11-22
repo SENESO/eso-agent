@@ -495,6 +495,25 @@ public sealed class TrayContext : ApplicationContext
                     reply = JsonSerializer.Serialize(response, EsoJson.Options);
                     break;
                 }
+                case "capabilities":
+                {
+                    // Codec capability probe (§20): the service asks what
+                    // this tray can actually encode before it offers codecs
+                    // in negotiation. The answer is the cached real probe —
+                    // h264 appears only when an encoder activated and
+                    // configured on this machine.
+                    var capability = MediaFoundation.DesktopCapabilities.H264;
+                    reply = new JsonObject
+                    {
+                        ["ok"] = true,
+                        ["codecs"] = JsonSerializer.SerializeToNode(MediaFoundation.DesktopCapabilities.Codecs(), EsoJson.Options),
+                        ["h264Available"] = capability.Available,
+                        ["h264Hardware"] = capability.HardwareAccelerated,
+                        ["h264Encoder"] = capability.EncoderName,
+                        ["h264Failure"] = capability.FailureReason,
+                    }.ToJsonString(EsoJson.Options);
+                    break;
+                }
                 case "desktop-open":
                 {
                     // Remote desktop: this connection turns into a bidirectional

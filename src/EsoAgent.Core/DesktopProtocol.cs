@@ -14,8 +14,11 @@ namespace EsoAgent.Core;
 //   either          : { "type": "close" }
 //
 // The frame channel is codec-negotiated so a hardware H.264 codec (Media
-// Foundation / VAAPI) can slot in later without protocol changes. v1 codecs are
-// "jpeg" (adaptive quality) and "rawdiff" (tile diff + deflate, pure managed).
+// Foundation / VAAPI) can slot in later without protocol changes. Shipped
+// codecs: "jpeg" (adaptive quality), "rawdiff" (tile diff + deflate, pure
+// managed) and — since the §20 groundwork — "h264" (Annex B access units,
+// Full = keyframe), offered by a host only when its encoder probe passed
+// and by a client only when it can decode.
 
 public sealed class MonitorInfo
 {
@@ -174,8 +177,13 @@ public static class DesktopPresets
 /// <summary>Codec/mode negotiation — pure logic, unit-tested.</summary>
 public static class DesktopNegotiation
 {
-    /// <summary>Server preference order. jpeg first (smallest), rawdiff as the always-available baseline.</summary>
-    public static readonly string[] ServerCodecPreference = { "jpeg", "rawdiff" };
+    /// <summary>Server preference order. h264 first: when BOTH sides offer
+    /// it, it is the motion codec (a host offers it only when its encoder
+    /// probe passed, a client only when it can decode), and it beats jpeg
+    /// on every moving frame. jpeg next (smallest stills), rawdiff as the
+    /// always-available baseline. Pairings that don't offer h264 negotiate
+    /// exactly as before.</summary>
+    public static readonly string[] ServerCodecPreference = { "h264", "jpeg", "rawdiff" };
 
     public static string? PickCodec(IReadOnlyCollection<string> hostCodecs, IReadOnlyCollection<string> clientCodecs)
     {

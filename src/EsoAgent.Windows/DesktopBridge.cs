@@ -16,7 +16,67 @@ namespace EsoAgent.Windows;
 /// </summary>
 public sealed class TrayDesktopHost : IDesktopHost
 {
-    public IReadOnlyCollection<string> SupportedCodecs => new[] { "jpeg" };
+    private readonly object _codecGate = new();
+    private IReadOnlyCollection<string> _codecs = new[] { "jpeg" };
+    private DateTime _codecsCheckedAt = DateTime.MinValue;
+    private bool _codecsFromTray;
+    private DateTime _h264FailedUntil = DateTime.MinValue;
+
+    /// <summary>
+    /// The codecs the tray can actually serve, asked over the pipe
+    /// ("capabilities") and cached: 30 s after a tray answer, 5 s after a
+    /// failure (no tray = jpeg only, as before §20). "h264" is offered
+    /// only when the tray's real encoder probe passed; after an h264
+    /// session open fails, h264 is held back for 5 minutes so the next
+    /// session negotiates jpeg instead of retrying a broken codec.
+    /// </summary>
+    public IReadOnlyCollection<string> SupportedCodecs
+    {
+        get
+        {
+            lock (_codecGate)
+            {
+                var ttl = _codecsFromTray ? TimeSpan.FromSeconds(30) : TimeSpan.FromSeconds(5);
+                if (DateTime.UtcNow - _codecsCheckedAt < ttl) return FilterHeldBack(_codecs);
+            }
+            var probed = QueryTrayCodecs();
+            lock (_codecGate)
+            {
+                _codecsCheckedAt = DateTime.UtcNow;
+                _codecsFromTray = probed != null;
+                if (probed != null) _codecs = probed;
+                return FilterHeldBack(_codecs);
+            }
+        }
+    }
+
+    private IReadOnlyCollection<string> FilterHeldBack(IReadOnlyCollection<string> codecs)
+    {
+        if (DateTime.UtcNow >= _h264FailedUntil || !codecs.Contains(VideoCodecNames.H264)) return codecs;
+        return codecs.Where(c => c != VideoCodecNames.H264).ToArray();
+    }
+
+    private static IReadOnlyCollection<string>? QueryTrayCodecs()
+    {
+        try
+        {
+            using var pipe = new NamedPipeClientStream(".", TrayPipeForwarder.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            pipe.Connect(2000);
+            using var reader = new StreamReader(pipe, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 4096, leaveOpen: true);
+            using var writer = new StreamWriter(pipe, new UTF8Encoding(false), bufferSize: 4096, leaveOpen: true) { AutoFlush = true };
+            writer.WriteLine(new JsonObject { ["action"] = "capabilities" }.ToJsonString(EsoJson.Options));
+            var line = reader.ReadLine();
+            if (line == null) return null;
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("ok", out var ok) || !ok.GetBoolean()) return null;
+            var codecs = root.GetProperty("codecs").Deserialize<List<string>>(EsoJson.Options);
+            if (codecs == null || codecs.Count == 0) return null;
+            if (!codecs.Contains(VideoCodecNames.Jpeg)) codecs.Insert(0, VideoCodecNames.Jpeg);
+            return codecs;
+        }
+        catch { return null; }
+    }
 
     public async Task<(IDesktopSession? Session, string? Error)> OpenAsync(DesktopHello hello, string codec, CancellationToken ct = default)
     {
@@ -37,6 +97,13 @@ public sealed class TrayDesktopHost : IDesktopHost
         var (ok, error) = await session.OpenAsync(hello, codec, ct);
         if (!ok)
         {
+            // An h264 open that fails after the probe passed (e.g. the
+            // encoder will not configure at this monitor's size) holds
+            // h264 back for a while — see SupportedCodecs.
+            if (codec == VideoCodecNames.H264)
+            {
+                lock (_codecGate) { _h264FailedUntil = DateTime.UtcNow.AddMinutes(5); }
+            }
             await session.DisposeAsync();
             return (null, error ?? "The tray refused the desktop session.");
         }

@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EsoAgent.Core;
+using EsoAgent.Tray.MediaFoundation;
 
 namespace EsoAgent.Tray;
 
@@ -15,7 +16,9 @@ namespace EsoAgent.Tray;
 /// handed off by TrayContext. Capture: DXGI Desktop Duplication primary, GDI
 /// fallback (any DXGI failure switches to GDI for the rest of the session).
 /// Encoding: JPEG with unchanged-frame skip (content hash) and simple adaptive
-/// quality. Input: SendInput. Clipboard: via the banner form's STA thread.
+/// quality — or, when the session negotiated "h264", Media Foundation H.264
+/// (hardware MFT preferred) fed by the same capture + hash skip, with the
+/// quality signal retuning the target bitrate. Input: SendInput. Clipboard: via the banner form's STA thread.
 /// A persistent topmost banner ("جلسة تحكم نشطة — Active control session") is
 /// shown for the whole session — the person at the machine cannot miss it.
 /// Live verification is PENDING FIRST REAL INSTALL.
@@ -45,6 +48,34 @@ public static class DesktopSessionHandler
         }).ToList();
         var selected = monitors.FirstOrDefault(m => m.Index == hello.Monitor) ?? monitors[0];
         var bounds = screens[selected.Index].Bounds;
+
+        // Negotiated codec (pipe root, chosen by the service from both
+        // sides' offers). "h264" is created BEFORE the ok reply: an
+        // encoder that will not configure refuses the session here with
+        // a clear error, and the service then stops offering h264 for a
+        // hold period — a session never starts on a codec the tray
+        // cannot actually encode. Anything else (jpeg, or
+        // a missing field from an older service) is the jpeg path,
+        // unchanged. H.264 wants even dimensions; the encoder is
+        // configured for the even-rounded monitor size and a frame that
+        // arrives at any other size goes out as jpeg instead.
+        var codec = root.TryGetProperty("codec", out var codecProp) ? codecProp.GetString() : null;
+        IVideoEncoder? encoder = null;
+        var encWidth = bounds.Width & ~1;
+        var encHeight = bounds.Height & ~1;
+        if (codec == VideoCodecNames.H264)
+        {
+            var quality0 = Math.Clamp(hello.Quality <= 0 ? 60 : hello.Quality, 10, 95);
+            var fps0 = Math.Clamp(hello.MaxFps <= 0 ? 10 : hello.MaxFps, 1, 30);
+            encoder = DesktopCapabilities.Factory.Create(encWidth, encHeight,
+                H264Policy.BitrateFor(encWidth, encHeight, fps0, quality0), fps0,
+                H264Policy.KeyFrameIntervalFrames(fps0));
+            if (encoder == null)
+            {
+                WriteLine(new JsonObject { ["ok"] = false, ["error"] = "H.264 encoding is not available on this device (the encoder probe failed)." }.ToJsonString(EsoJson.Options));
+                return;
+            }
+        }
 
         WriteLine(new JsonObject
         {
@@ -123,6 +154,8 @@ public static class DesktopSessionHandler
         if (useDxgi) dxgi.SetSize(bounds.Width, bounds.Height);
         var quality = Math.Clamp(hello.Quality <= 0 ? 60 : hello.Quality, 10, 95);
         var fps = Math.Clamp(hello.MaxFps <= 0 ? 10 : hello.MaxFps, 1, 30);
+        var keyFrames = new KeyFrameScheduler(H264Policy.KeyFrameIntervalFrames(fps));
+        var pumpStart = DateTime.UtcNow;
         byte[]? lastHash = null;
         long seq = 0;
         string? lastClipboard = null;
@@ -148,13 +181,33 @@ public static class DesktopSessionHandler
                         if (lastHash == null || !hash.AsSpan().SequenceEqual(lastHash))
                         {
                             lastHash = hash;
-                            var jpeg = EncodeJpeg(bitmap, quality);
-                            WriteLine(JsonSerializer.Serialize(new DesktopFrame
+                            if (encoder != null && bitmap.Width == encWidth && bitmap.Height == encHeight)
                             {
-                                Seq = ++seq, Codec = "jpeg", Full = true,
-                                Width = bitmap.Width, Height = bitmap.Height,
-                                Data = Convert.ToBase64String(jpeg),
-                            }, EsoJson.Options));
+                                var (bgra, stride) = ExtractBgra(bitmap);
+                                var raw = new RawVideoFrame
+                                {
+                                    Bgra = bgra, Width = bitmap.Width, Height = bitmap.Height,
+                                    Stride = stride,
+                                    TimestampMs = (long)(DateTime.UtcNow - pumpStart).TotalMilliseconds,
+                                };
+                                foreach (var packet in encoder.Encode(raw, keyFrames.NextForceKeyFrame()))
+                                {
+                                    keyFrames.ObservePacket(packet.IsKeyFrame);
+                                    WriteLine(JsonSerializer.Serialize(
+                                        H264Policy.ToDesktopFrame(packet, ++seq, bitmap.Width, bitmap.Height),
+                                        EsoJson.Options));
+                                }
+                            }
+                            else
+                            {
+                                var jpeg = EncodeJpeg(bitmap, quality);
+                                WriteLine(JsonSerializer.Serialize(new DesktopFrame
+                                {
+                                    Seq = ++seq, Codec = "jpeg", Full = true,
+                                    Width = bitmap.Width, Height = bitmap.Height,
+                                    Data = Convert.ToBase64String(jpeg),
+                                }, EsoJson.Options));
+                            }
                         }
                     }
                 }
@@ -177,6 +230,10 @@ public static class DesktopSessionHandler
                 var budget = TimeSpan.FromSeconds(1.0 / fps);
                 if (elapsed > budget * 1.5 && quality > 30) quality -= 10;
                 else if (elapsed < budget * 0.5 && quality < Math.Clamp(hello.Quality, 10, 95)) quality += 5;
+                // For h264 the same quality signal retunes the target
+                // bitrate (the encoder rebuilds only on a real change).
+                if (encoder is IVideoEncoderBitrateControl bitrateControl)
+                    bitrateControl.SetBitrate(H264Policy.BitrateFor(encWidth, encHeight, fps, quality));
                 var wait = budget - elapsed;
                 if (wait > TimeSpan.Zero) Thread.Sleep(wait);
             }
@@ -184,6 +241,7 @@ public static class DesktopSessionHandler
         catch { /* session ends */ }
         finally
         {
+            encoder?.Dispose();
             dxgi.Dispose();
             try { banner?.Invoke(() => { PrivacyOverlay.Set(false); ChatFormHost.Close(); banner.Close(); }); } catch { }
             try { server.Disconnect(); } catch { }
@@ -206,6 +264,22 @@ public static class DesktopSessionHandler
             var bytes = new byte[Math.Abs(data.Stride) * bitmap.Height];
             Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
             return SHA256.HashData(bytes);
+        }
+        finally { bitmap.UnlockBits(data); }
+    }
+
+    /// <summary>The frame's BGRA pixels for the video encoder — same
+    /// LockBits read as the hash, kept as bytes + stride for Core's
+    /// BGRA→NV12 conversion.</summary>
+    private static (byte[] Bytes, int Stride) ExtractBgra(Bitmap bitmap)
+    {
+        var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            var stride = Math.Abs(data.Stride);
+            var bytes = new byte[stride * bitmap.Height];
+            Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
+            return (bytes, stride);
         }
         finally { bitmap.UnlockBits(data); }
     }
