@@ -51,14 +51,23 @@ jobs:
         shell: pwsh
         run: |
           $v = "${{ needs.version.outputs.version }}"
-          dotnet publish src/EsoAgent.Windows -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o payload --nologo -v q
-          dotnet publish src/EsoAgent.Tray -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o payload --nologo -v q
-          dotnet publish src/EsoAgent.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o payload --nologo -v q
+          # Installer payload (installer diet, BUILD-REPORT §19): the
+          # three Windows programs publish NON-single-file into ONE
+          # folder — the shared frameworks land once instead of once
+          # per exe — satellites English-only, and the WPF/design-time
+          # files no shipped code can reach are pruned (same list as
+          # scripts/publish.sh). The standalone pkg-* downloads below
+          # stay single-file.
+          dotnet publish src/EsoAgent.Windows -c Release -r win-x64 --self-contained true -p:DebugType=none -p:SatelliteResourceLanguages=en -o payload --nologo -v q
+          dotnet publish src/EsoAgent.Tray -c Release -r win-x64 --self-contained true -p:DebugType=none -p:SatelliteResourceLanguages=en -o payload --nologo -v q
+          dotnet publish src/EsoAgent.App -c Release -r win-x64 --self-contained true -p:DebugType=none -p:SatelliteResourceLanguages=en -o payload --nologo -v q
+          $prune = @("PresentationFramework.dll","PresentationCore.dll","PresentationUI.dll","ReachFramework.dll","System.Windows.Controls.Ribbon.dll","PresentationNative_cor3.dll","wpfgfx_cor3.dll","D3DCompiler_47_cor3.dll","PenImc_cor3.dll","UIAutomationClientSideProviders.dll","System.Printing.dll","PresentationFramework.Aero.dll","PresentationFramework.Aero2.dll","PresentationFramework.AeroLite.dll","PresentationFramework.Classic.dll","PresentationFramework.Luna.dll","PresentationFramework.Royale.dll","PresentationFramework-SystemData.dll","PresentationFramework-SystemDrawing.dll","PresentationFramework-SystemXml.dll","PresentationFramework-SystemXmlLinq.dll","System.Windows.Presentation.dll","System.Windows.Forms.Design.dll")
+          foreach ($f in $prune) { Remove-Item (Join-Path payload $f) -ErrorAction SilentlyContinue }
           Copy-Item install/install.ps1, install/uninstall.ps1, install/update-apply.ps1 payload/
           New-Item -ItemType Directory -Force dist | Out-Null
-          dotnet publish src/EsoAgent.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-app-windows --nologo -v q
-          dotnet publish src/EsoAgent.Client -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-client-windows --nologo -v q
-          dotnet publish src/EsoAgent.Server -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o dist/pkg-server-windows --nologo -v q
+          dotnet publish src/EsoAgent.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:SatelliteResourceLanguages=en -o dist/pkg-app-windows --nologo -v q
+          dotnet publish src/EsoAgent.Client -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:SatelliteResourceLanguages=en -o dist/pkg-client-windows --nologo -v q
+          dotnet publish src/EsoAgent.Server -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:SatelliteResourceLanguages=en -o dist/pkg-server-windows --nologo -v q
           # Embedded mesh engine: eso-mesh.exe built from pinned wireguard-go
           # source + the hash-verified official wintun.dll. The Windows
           # package must never ship without them (no external WireGuard
