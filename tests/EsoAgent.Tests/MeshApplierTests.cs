@@ -193,13 +193,51 @@ public class MeshApplierTests
         var second = await applier.ApplyWindowsCoreAsync(model, frame, wg);
         Assert.Equal(2, rig.Process.Starts); // the recovery restart
         Assert.Equal(1, rig.Process.Stops);
-        Assert.Equal(3, rig.Transport.SetRequests.Count); // normal set + re-push after the restart
+        // Set count is 2, not the pre-§24 3: the idempotency gate skipped
+        // this apply's redundant set (the engine already held the model —
+        // the gate still refreshed the status, which is what let the
+        // recovery see the dead-receiver signature), so the only new set
+        // is the re-push after the recovery restart.
+        Assert.Equal(2, rig.Transport.SetRequests.Count);
         Assert.Contains("engine restarted to recover its dead UDP receiver", second);
 
         var third = await applier.ApplyWindowsCoreAsync(model, frame, wg);
         Assert.Equal(2, rig.Process.Starts); // throttled: no second restart
-        Assert.Equal(4, rig.Transport.SetRequests.Count); // only the normal set
+        Assert.Equal(2, rig.Transport.SetRequests.Count); // gate skip; the throttled recovery adds nothing
         Assert.DoesNotContain("dead UDP receiver", third);
+        supervisor.Dispose();
+    }
+
+    /// <summary>
+    /// The 2026-11-22 evening field defect, reproduced at the applier
+    /// core: the resync re-pushes the identical frame every 30 s, and
+    /// every apply used to push a full-replacement UAPI set into the
+    /// engine — wireguard-go destroys all peer handshake state on a
+    /// peer replacement, so the tunnel never lived long enough to
+    /// carry traffic. Identical re-applies must not reconfigure the
+    /// engine at all (the supervisor's idempotency gate, §24).
+    /// </summary>
+    [Fact]
+    public async Task ApplyWindowsCore_RepeatedIdenticalApplies_DoNotReconfigureEngine()
+    {
+        using var rig = new Rig(shimBasePort: 52061, transportAlive: false);
+        var supervisor = rig.BuildSupervisor(rig.Transport);
+        var applier = new MeshApplier(rig.State, supervisor);
+        var frame = Frame();
+        var wg = WgIdentity.LoadOrCreate(rig.Dir);
+        var model = WgConfigBuilder.BuildModel(wg.PrivateKeyB64, "10.77.0.3", 51820, frame.Peers, 52061);
+
+        var first = await applier.ApplyWindowsCoreAsync(model, frame, wg);
+        Assert.Equal(1, rig.Process.Starts);
+        Assert.Single(rig.Transport.SetRequests);
+
+        var second = await applier.ApplyWindowsCoreAsync(model, frame, wg);
+        var third = await applier.ApplyWindowsCoreAsync(model, frame, wg);
+
+        Assert.Equal(1, rig.Process.Starts); // engine never restarted
+        Assert.Single(rig.Transport.SetRequests); // and never reconfigured
+        Assert.Contains("unchanged", second);
+        Assert.Contains("unchanged", third);
         supervisor.Dispose();
     }
 

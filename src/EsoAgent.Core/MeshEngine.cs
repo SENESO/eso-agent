@@ -54,6 +54,39 @@ public sealed class WgInterfaceConfig
     public List<WgPeerConfig> Peers { get; set; } = new();
 }
 
+/// <summary>
+/// Effective equality of two interface models: every field the engine
+/// can observe, in order — peer order is significant because relay
+/// shim ports are assigned by peer index. Display-only fields (a
+/// peer's Name/Code) are excluded: they never reach the engine, so a
+/// rename alone must not reconfigure it. The mesh idempotency gate
+/// (MeshEngineSupervisor, §24) keys on this: a UAPI set is a full
+/// peer replacement, so "same model" must mean "the engine already
+/// holds exactly this" before a re-apply may be skipped.
+/// </summary>
+public static class WgConfigEquality
+{
+    public static bool Equals(WgInterfaceConfig? a, WgInterfaceConfig? b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        if (!string.Equals(a.PrivateKeyB64, b.PrivateKeyB64, StringComparison.Ordinal)
+            || !string.Equals(a.VirtualIp, b.VirtualIp, StringComparison.Ordinal)
+            || a.ListenPort != b.ListenPort
+            || a.Peers.Count != b.Peers.Count) return false;
+        for (var i = 0; i < a.Peers.Count; i++)
+        {
+            var x = a.Peers[i];
+            var y = b.Peers[i];
+            if (!string.Equals(x.PublicKeyB64, y.PublicKeyB64, StringComparison.Ordinal)
+                || !string.Equals(x.Endpoint, y.Endpoint, StringComparison.Ordinal)
+                || x.PersistentKeepalive != y.PersistentKeepalive
+                || !x.AllowedIps.SequenceEqual(y.AllowedIps, StringComparer.Ordinal)) return false;
+        }
+        return true;
+    }
+}
+
 /// <summary>Parses wg-quick style config text into a <see cref="WgInterfaceConfig"/> (pure).</summary>
 public static class WgConfigParser
 {

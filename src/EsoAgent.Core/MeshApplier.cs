@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 
 namespace EsoAgent.Core;
@@ -42,12 +43,27 @@ public sealed class WgIdentity
 /// own installer; there is no external WireGuard dependency). On Linux the
 /// tunnel still runs through wg-quick (see MESH-EMBED-REPORT.md for the
 /// follow-up that retires that too).
+///
+/// Applies are IDEMPOTENT (§24): the server re-pushes the frame every
+/// 30 s (the §15 resync), so an apply whose effective configuration is
+/// unchanged must not touch the tunnel — on Windows the engine
+/// supervisor skips its peer-replacing UAPI set, and here the wg-quick
+/// bounce, the exit-node commands and the firewall plan are skipped on
+/// an unchanged fingerprint. The self-healing parts still run every
+/// frame: relay shim Sync (restarts dead loops), the hosts merge
+/// (content-gated), and the engine's status refresh + dead-receiver
+/// recovery.
 /// </summary>
 public sealed class MeshApplier
 {
     private readonly AgentState _state;
     private readonly RelayShimSet _shims = new();
     private MeshEngineSupervisor? _engine;
+    /// <summary>Fingerprint of the last frame whose platform apply
+    /// converged (see <see cref="ComputeFingerprint"/>); null until the
+    /// first converged apply, so a fresh agent always applies in full —
+    /// the §15 resync heal depends on that.</summary>
+    private string? _lastAppliedFingerprint;
     public string Status { get; private set; } = "mesh not configured";
 
     /// <summary>
@@ -122,6 +138,15 @@ public sealed class MeshApplier
         var model = WgConfigBuilder.BuildModel(wg.PrivateKeyB64, frame.YourVirtualIp, config.Mesh.ListenPort, frame.Peers, config.Mesh.RelayShimBasePort, useExit);
         if (useExit != null) notes.Add($"exit-node: routing all traffic via {frame.ExitNodeCode}");
 
+        // Idempotency (§24): the resync re-pushes this frame every 30 s.
+        // When the effective configuration is unchanged since the last
+        // converged apply, the destructive steps (tunnel reload, exit-node
+        // commands, firewall plan) are skipped — the tunnel must not be
+        // rebuilt for a frame that changes nothing.
+        var fingerprint = ComputeFingerprint(model, frame, config.Mesh.RelayShimBasePort);
+        var unchanged = _lastAppliedFingerprint != null && _lastAppliedFingerprint == fingerprint;
+        var coreConverged = false;
+
         // 0+1) Relay shims + tunnel. The shims go FIRST (Windows core does
         // this explicitly; the Linux path below mirrors it): the engine sends
         // its first handshake initiation the moment it is configured, and on
@@ -132,7 +157,11 @@ public sealed class MeshApplier
         // stranded the laptop mesh at rx 0 forever.
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
+            // The supervisor's own gate makes the engine part of the core
+            // a status-refresh no-op when the model is unchanged; the
+            // shims still sync and the dead-receiver recovery still runs.
             notes.Add(await ApplyWindowsCoreAsync(model, frame, wg, ct));
+            coreConverged = _engine != null && _engine.IsApplied(model);
         }
         else
         {
@@ -142,35 +171,51 @@ public sealed class MeshApplier
                 notes.Add($"relay: {_shims.Status}");
             }
             catch (Exception ex) { notes.Add($"relay: {ex.Message}"); }
-            try { notes.Add(await ApplyTunnelAsync(model, ct)); }
-            catch (Exception ex) { notes.Add($"tunnel: {ex.Message}"); }
+            if (unchanged)
+            {
+                // No wg-quick down/up bounce for a frame that changes
+                // nothing — that bounce is the Linux twin of the Windows
+                // defect: the tunnel died every 30 s either way.
+                notes.Add("tunnel: configuration unchanged — apply skipped");
+                coreConverged = true;
+            }
+            else
+            {
+                try
+                {
+                    var (note, converged) = await ApplyTunnelAsync(model, ct);
+                    notes.Add(note);
+                    coreConverged = converged;
+                }
+                catch (Exception ex) { notes.Add($"tunnel: {ex.Message}"); }
+            }
         }
 
         // 1b) Exit-node duty (v1.2): when THIS device is the designated exit
         // node, enable forwarding + NAT so peers' default-route traffic can
         // leave through it. Linux is automated (sysctl + iptables MASQUERADE
         // for mesh sources); Windows NAT is not automated (noted honestly —
-        // the designation and routing still apply).
-        if (frame.YouAreExitNode)
+        // the designation and routing still apply). Skipped on an unchanged
+        // frame (§24): the commands are idempotent in effect, and re-running
+        // them every 30 s was pure churn.
+        if (frame.YouAreExitNode && !unchanged)
         {
             try
             {
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    var commands = new[]
-                    {
-                        new[] { "sysctl", "-w", "net.ipv4.ip_forward=1" },
-                        new[] { "iptables", "-t", "nat", "-C", "POSTROUTING", "-s", IpAllocator.DefaultCidr, "-j", "MASQUERADE" },
-                        new[] { "iptables", "-t", "nat", "-A", "POSTROUTING", "-s", IpAllocator.DefaultCidr, "-j", "MASQUERADE" },
-                    };
+                    // sysctl, then the MASQUERADE rule: -C checks for it and
+                    // -A runs ONLY when the check missed. The old loop ran
+                    // -A unconditionally after -C, stacking one duplicate
+                    // rule per apply (every 30 s under the resync).
                     var applied = 0;
-                    foreach (var argv in commands)
-                    {
-                        var result = await _state.Platform.ProcessRunner.RunAsync(
-                            new ExecRequest { File = argv[0], Args = argv.Skip(1).ToArray(), TimeoutMs = 30_000 }, ct);
-                        if (result.ExitCode == 0) applied++;
-                    }
-                    notes.Add($"exit-node: forwarding+NAT {applied}/{commands.Length} commands ok");
+                    if (await RunPlatformCommandAsync(new[] { "sysctl", "-w", "net.ipv4.ip_forward=1" }, ct)) applied++;
+                    var rulePresent = await RunPlatformCommandAsync(
+                        new[] { "iptables", "-t", "nat", "-C", "POSTROUTING", "-s", IpAllocator.DefaultCidr, "-j", "MASQUERADE" }, ct);
+                    if (rulePresent) applied += 2; // check passed: the add is already satisfied
+                    else if (await RunPlatformCommandAsync(
+                        new[] { "iptables", "-t", "nat", "-A", "POSTROUTING", "-s", IpAllocator.DefaultCidr, "-j", "MASQUERADE" }, ct)) applied += 2;
+                    notes.Add($"exit-node: forwarding+NAT {applied}/3 commands ok");
                 }
                 else
                 {
@@ -193,8 +238,9 @@ public sealed class MeshApplier
         }
         catch (Exception ex) { notes.Add($"hosts: {ex.Message}"); }
 
-        // 3) Firewall plan.
-        if (frame.Firewall != null)
+        // 3) Firewall plan (skipped on an unchanged frame, §24 — the plan
+        // is part of the fingerprint, so a plan change re-runs it).
+        if (frame.Firewall != null && !unchanged)
         {
             try
             {
@@ -216,6 +262,48 @@ public sealed class MeshApplier
         Status = string.Join("; ", notes);
         _state.MeshStatus = Status;
         audit.Write("mesh", $"applied vip={frame.YourVirtualIp} peers={frame.Peers.Count} — {Status}", "ok");
+
+        // Record the fingerprint only when the tunnel actually converged:
+        // if the engine rejected the config or wg-quick failed, the next
+        // (identical) frame must retry the full apply, not skip it.
+        if (!unchanged && coreConverged) _lastAppliedFingerprint = fingerprint;
+    }
+
+    /// <summary>
+    /// The effective-configuration fingerprint an apply is gated on:
+    /// the engine model (identity key, virtual IP, listen port, and each
+    /// peer's key/allowed-IPs/endpoint/keepalive in order — the model
+    /// already folds in exit-node routing and relay shim port
+    /// assignment), the relay endpoint and shim base port (the shim
+    /// inputs), the exit-node designation, and the firewall plan. The
+    /// hosts map is deliberately NOT part of it: the hosts step is
+    /// content-gated on its own, and a hosts-only change must not
+    /// rebuild the tunnel.
+    /// </summary>
+    internal static string ComputeFingerprint(WgInterfaceConfig model, FleetMeshFrame frame, int relayShimBasePort)
+    {
+        var sb = new StringBuilder();
+        sb.Append(model.PrivateKeyB64).Append('|').Append(model.VirtualIp).Append('|').Append(model.ListenPort);
+        foreach (var peer in model.Peers)
+        {
+            sb.Append("|peer:").Append(peer.PublicKeyB64)
+              .Append(',').Append(string.Join(",", peer.AllowedIps))
+              .Append(',').Append(peer.Endpoint ?? "-")
+              .Append(',').Append(peer.PersistentKeepalive);
+        }
+        sb.Append("|relay:").Append(frame.ServerRelayEndpoint ?? "-");
+        sb.Append("|shimbase:").Append(relayShimBasePort);
+        sb.Append("|exit:").Append(frame.YouAreExitNode ? '1' : '0');
+        sb.Append("|fw:").Append(frame.Firewall == null ? "-" : JsonSerializer.Serialize(frame.Firewall, EsoJson.Options));
+        return sb.ToString();
+    }
+
+    /// <summary>Runs one platform command; true when it exited 0.</summary>
+    private async Task<bool> RunPlatformCommandAsync(string[] argv, CancellationToken ct)
+    {
+        var result = await _state.Platform.ProcessRunner.RunAsync(
+            new ExecRequest { File = argv[0], Args = argv.Skip(1).ToArray(), TimeoutMs = 30_000 }, ct);
+        return result.ExitCode == 0;
     }
 
     /// <summary>
@@ -306,24 +394,34 @@ public sealed class MeshApplier
         return status.Peers.Any(p => p.TxBytes > 0 && p.RxBytes == 0 && p.LastHandshakeUnixSec == 0);
     }
 
-    private async Task<string> ApplyTunnelAsync(WgInterfaceConfig model, CancellationToken ct)
+    /// <summary>Applies the tunnel for the non-Windows-core path. The
+    /// Converged half tells the idempotency gate whether this state may
+    /// be recorded as applied: a failed wg-quick up must be retried by
+    /// the next frame, while "not installed" / "unsupported OS" are as
+    /// converged as this host can ever be.</summary>
+    private async Task<(string Note, bool Converged)> ApplyTunnelAsync(WgInterfaceConfig model, CancellationToken ct)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return await ApplyWindowsTunnelAsync(model, ct);
+        {
+            var note = await ApplyWindowsTunnelAsync(model, ct);
+            return (note, _engine != null && _engine.IsApplied(model));
+        }
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             var runner = _state.Platform.ProcessRunner;
             var wgQuick = FindOnPath("wg-quick");
-            if (wgQuick == null) return "tunnel: wg-quick not installed (config generated only)";
+            if (wgQuick == null) return ("tunnel: wg-quick not installed (config generated only)", true);
             var path = _state.Config.Mesh.WgConfigPath;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, WgConfigBuilder.RenderText(model), ct);
             var name = Path.GetFileNameWithoutExtension(path);
             await runner.RunAsync(new ExecRequest { File = wgQuick, Args = new[] { "down", name }, TimeoutMs = 30_000 }, ct);
             var up = await runner.RunAsync(new ExecRequest { File = wgQuick, Args = new[] { "up", name }, TimeoutMs = 60_000 }, ct);
-            return up.ExitCode == 0 ? $"tunnel: wg-quick up {name}" : $"tunnel: wg-quick exited {up.ExitCode}: {up.Stderr.Trim()}";
+            return up.ExitCode == 0
+                ? ($"tunnel: wg-quick up {name}", true)
+                : ($"tunnel: wg-quick exited {up.ExitCode}: {up.Stderr.Trim()}", false);
         }
-        return "tunnel: unsupported OS";
+        return ("tunnel: unsupported OS", true);
     }
 
     /// <summary>

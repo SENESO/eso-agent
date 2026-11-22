@@ -179,6 +179,11 @@ public sealed class MeshEngineSupervisor : IDisposable
     private IMeshEngineProcess? _process;
     private bool _adopted;
     private WgInterfaceConfig? _desired;
+    /// <summary>The model the CURRENT engine instance is known to hold
+    /// (set only after a successful UAPI set on this instance; cleared
+    /// whenever a new instance starts or is adopted, and on stop). The
+    /// idempotency gate keys on it — see ApplyAsync.</summary>
+    private WgInterfaceConfig? _appliedModel;
     private CancellationTokenSource? _monitorCts;
     private Task? _monitorTask;
     private int _restarts;
@@ -187,6 +192,12 @@ public sealed class MeshEngineSupervisor : IDisposable
     public UapiDeviceStatus? LastStatus { get; private set; }
     public int RestartCount => _restarts;
     public bool Adopted => _adopted;
+
+    /// <summary>True when the live engine instance already holds exactly
+    /// this configuration (a set for it succeeded on this instance and
+    /// the instance has not been replaced since).</summary>
+    public bool IsApplied(WgInterfaceConfig model)
+        => _appliedModel != null && WgConfigEquality.Equals(_appliedModel, model);
 
     public MeshEngineSupervisor(
         string enginePath,
@@ -225,7 +236,10 @@ public sealed class MeshEngineSupervisor : IDisposable
     /// <summary>
     /// Converges the engine to <paramref name="model"/>: starts or adopts the
     /// engine if needed, pushes the configuration via UAPI, (re)applies the
-    /// adapter addressing, and reads the status back.
+    /// adapter addressing, and reads the status back. Idempotent: when the
+    /// live engine instance already holds exactly this model, the set and
+    /// the addressing are skipped (a set is a full peer replacement — see
+    /// the gate in the body) and only the status is refreshed.
     /// </summary>
     public async Task<MeshEngineApplyResult> ApplyAsync(WgInterfaceConfig model, CancellationToken ct = default)
     {
@@ -236,10 +250,37 @@ public sealed class MeshEngineSupervisor : IDisposable
             var ensured = await EnsureEngineAsync(ct);
             if (!ensured.Ok) return ensured;
 
+            if (IsApplied(model))
+            {
+                // Idempotent apply (field defect 2026-11-22 evening, §24):
+                // the live engine already holds exactly this configuration,
+                // and a UAPI set is NOT a no-op on wireguard-go —
+                // BuildSetRequest replaces the peer list wholesale
+                // (replace_peers=true), which destroys every peer's
+                // handshake state, session keys and byte counters. The
+                // fleet resync re-pushes the mesh frame every 30 s, so an
+                // unconditional set kept the tunnel permanently
+                // re-handshaking: handshakes completed, then the next tick
+                // wiped them before TCP could cross (field audit read
+                // "0 handshake(s), tx 148 B / rx 0 B" on every apply —
+                // 148 B is one handshake initiation, sent into a peer
+                // table that had just been zeroed). Skip the set and the
+                // addressing churn; refresh the status only, so status
+                // surfaces (and the applier's dead-receiver check) keep
+                // seeing live counters.
+                var current = await ReadStatusAsync(ct);
+                LastStatus = current;
+                State = MeshEngineState.Running;
+                EnsureMonitor();
+                return new MeshEngineApplyResult(true,
+                    $"tunnel: embedded engine up; configuration unchanged — apply skipped; {current?.Summarize() ?? "status pending"}", current);
+            }
+
             var setResponse = await UapiAsync(UapiProtocol.BuildSetRequest(model), ct);
             if (setResponse == null || !UapiProtocol.IsSuccess(setResponse))
                 return new MeshEngineApplyResult(false,
                     $"tunnel: engine rejected the configuration (errno={(setResponse == null ? "no response" : UapiProtocol.ParseErrno(setResponse).ToString())})", LastStatus);
+            _appliedModel = model;
 
             var addressing = await RunCommandsAsync(_applyAddressing(InterfaceName, model), ct);
             var status = await ReadStatusAsync(ct);
@@ -262,6 +303,7 @@ public sealed class MeshEngineSupervisor : IDisposable
             StopMonitor();
             var model = _desired;
             _desired = null;
+            _appliedModel = null;
 
             if (_process != null)
             {
@@ -337,6 +379,7 @@ public sealed class MeshEngineSupervisor : IDisposable
                 StopMonitor();
                 return;
             }
+            _appliedModel = desired; // the restarted engine now holds it — later applies may skip
             await RunCommandsAsync(_applyAddressing(InterfaceName, desired), ct);
             LastStatus = await ReadStatusAsync(ct);
             State = MeshEngineState.Running;
@@ -356,6 +399,7 @@ public sealed class MeshEngineSupervisor : IDisposable
         if (await ProbeEngineAsync(ct))
         {
             _adopted = true;
+            _appliedModel = null; // a new instance for us: what it holds is unknown, so the next apply must set it
             _audit("adopted the mesh engine left running by a previous agent lifetime", "ok");
             return new MeshEngineApplyResult(true, "adopted running engine", LastStatus);
         }
@@ -377,6 +421,7 @@ public sealed class MeshEngineSupervisor : IDisposable
             return new MeshEngineApplyResult(false, $"tunnel: embedded mesh engine failed to start: {ex.Message}", LastStatus);
         }
         _process = proc;
+        _appliedModel = null; // a fresh engine holds nothing yet
 
         // Wait for the UAPI pipe to come up (adapter creation happens first).
         var deadline = DateTimeOffset.UtcNow + _startupTimeout;

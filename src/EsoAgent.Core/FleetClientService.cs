@@ -96,12 +96,19 @@ public sealed class FleetClientService : BackgroundService
     {
         try
         {
-            File.WriteAllText(SignersFile, JsonSerializer.Serialize(new TrustedKeys
+            var json = JsonSerializer.Serialize(new TrustedKeys
             {
                 Operator = _operatorKey,
                 Panel = _panelKey,
                 Peers = new Dictionary<string, string>(_state.ApprovedPeers),
-            }));
+            });
+            // The state frame is re-pushed every 30 s (§15 resync) and the
+            // signer set usually does not change with it: rewriting the
+            // same bytes every tick is pure churn (§24 audit). A missing
+            // or different file is still written immediately — revocation
+            // and approval changes alter the content, so they land at once.
+            if (File.Exists(SignersFile) && File.ReadAllText(SignersFile) == json) return;
+            File.WriteAllText(SignersFile, json);
         }
         catch { }
     }
@@ -122,14 +129,20 @@ public sealed class FleetClientService : BackgroundService
             if (!cfg.Fleet.Enabled || device == null || string.IsNullOrWhiteSpace(cfg.Fleet.ServerUrl)) return;
             var fleetUrl = ConsoleLink.FleetUrlFromServerUrl(cfg.Fleet.ServerUrl);
             if (fleetUrl == null) return;
-            ConsoleLink.Write(cfg.ResolvedDataDir, new ConsoleLink
+            var link = new ConsoleLink
             {
                 DeviceCode = device.Code,
                 DeviceName = cfg.ResolvedDeviceName,
                 FleetUrl = fleetUrl,
                 FleetFingerprint = (cfg.Fleet.ServerFingerprint ?? "").Trim().ToLowerInvariant(),
                 AgentVersion = ProductInfo.Version,
-            });
+            };
+            // Same resync churn as PersistSigners (§24 audit): the link
+            // content changes only with enrollment/config/version, so an
+            // identical file on disk is left untouched.
+            var path = ConsoleLink.PathForDataDir(cfg.ResolvedDataDir);
+            if (File.Exists(path) && File.ReadAllText(path) == JsonSerializer.Serialize(link, EsoJson.Options)) return;
+            ConsoleLink.Write(cfg.ResolvedDataDir, link);
         }
         catch { }
     }
