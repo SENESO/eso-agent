@@ -42,6 +42,11 @@ public sealed class FleetClientService : BackgroundService
     {
         public string? Operator { get; set; }
         public string? Panel { get; set; }
+        /// <summary>Approved-peer set for the P2P gate (code → base64 SPKI), as
+        /// last delivered in a state frame. Persisted with the signer keys so a
+        /// device that restarts offline keeps its last set; the next state
+        /// frame replaces it wholesale.</summary>
+        public Dictionary<string, string>? Peers { get; set; }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -76,17 +81,27 @@ public sealed class FleetClientService : BackgroundService
                 var keys = JsonSerializer.Deserialize<TrustedKeys>(File.ReadAllText(SignersFile));
                 _operatorKey = keys?.Operator;
                 _panelKey = keys?.Panel;
+                if (keys?.Peers is { Count: > 0 } peers)
+                    _state.ApprovedPeers = new Dictionary<string, string>(peers, StringComparer.OrdinalIgnoreCase);
             }
         }
         catch { _operatorKey = null; _panelKey = null; }
+        // Keep AgentState in sync from boot, not only from the first state
+        // frame: the P2P trust gate reads these before any frame arrives.
+        _state.OperatorPublicKeySpki = _operatorKey;
+        _state.PanelPublicKeySpki = _panelKey;
     }
 
     private void PersistSigners()
     {
         try
         {
-            File.WriteAllText(SignersFile, JsonSerializer.Serialize(
-                new TrustedKeys { Operator = _operatorKey, Panel = _panelKey }));
+            File.WriteAllText(SignersFile, JsonSerializer.Serialize(new TrustedKeys
+            {
+                Operator = _operatorKey,
+                Panel = _panelKey,
+                Peers = new Dictionary<string, string>(_state.ApprovedPeers),
+            }));
         }
         catch { }
     }
@@ -280,6 +295,7 @@ public sealed class FleetClientService : BackgroundService
                 var stateFrame = JsonSerializer.Deserialize<FleetStateFrame>(json, EsoJson.Options)!;
                 _stateFrameSeen = true;
                 _enrollmentState = stateFrame.State;
+                _state.FleetEnrollmentState = stateFrame.State;
                 // Clock-skew sample for the doctor check (v1.1): the server stamps
                 // its state frames; skew = server time − local time at receipt.
                 if (stateFrame.ServerTime is { } serverTime)
@@ -295,11 +311,20 @@ public sealed class FleetClientService : BackgroundService
                     // same for devices that are connected when revocation happens.)
                     _operatorKey = string.IsNullOrWhiteSpace(stateFrame.OperatorPublicKey) ? null : stateFrame.OperatorPublicKey;
                     if (!string.IsNullOrWhiteSpace(stateFrame.PanelPublicKey)) _panelKey = stateFrame.PanelPublicKey;
+                    // The approved-peer set rides the same frame (P2P trust
+                    // feed): replaced wholesale, self excluded defensively.
+                    var peers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var p in stateFrame.ApprovedPeers)
+                        if (!string.IsNullOrWhiteSpace(p.Code) && !string.IsNullOrWhiteSpace(p.PublicKey)
+                            && !p.Code.Equals(_state.Device?.Code, StringComparison.OrdinalIgnoreCase))
+                            peers[p.Code] = p.PublicKey;
+                    _state.ApprovedPeers = peers;
                     PersistSigners();
                 }
                 if (stateFrame.State == "Rejected")
                 {
                     _operatorKey = null; _panelKey = null;
+                    _state.ApprovedPeers = new Dictionary<string, string>();
                     PersistSigners();
                 }
                 // v1.2: the update-fetch endpoint verifies rollout signatures

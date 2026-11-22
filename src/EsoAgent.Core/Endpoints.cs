@@ -827,6 +827,7 @@ public static class Endpoints
             MeshEnabled = state.Config.Mesh.Enabled,
             MeshVirtualIp = state.MeshVirtualIp,
             MeshStatus = state.MeshStatus,
+            P2pStatus = state.P2pStatus,
             Supervised = state.Supervisor?.Snapshot().ToList() ?? new List<SupervisedStatusDto>(),
             JobsRunning = state.Jobs?.RunningCount ?? 0,
             Capabilities = state.Config.Capabilities,

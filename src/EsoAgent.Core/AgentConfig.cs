@@ -15,6 +15,9 @@ public sealed class AgentConfig
     public string? DeviceName { get; set; }
     /// <summary>Fleet enrollment. Disabled/absent = Standalone mode (direct by IP, as before).</summary>
     public FleetOptions Fleet { get; set; } = new();
+    /// <summary>Peer-to-peer layer: DHT discovery by device code + encrypted peer
+    /// sessions with peer relay. The fleet hub stays as bootstrap + fallback.</summary>
+    public P2pOptions P2p { get; set; } = new();
     /// <summary>WireGuard mesh options (fleet networking layer).</summary>
     public MeshOptions Mesh { get; set; } = new();
     /// <summary>Explicit bind addresses. Empty = auto: Tailscale interface (100.64.0.0/10) + loopback.</summary>

@@ -268,16 +268,30 @@ public static class FleetConnectEndpoint
         await FleetMesh.PushToAllAsync(state);
     }
 
-    /// <summary>Sends the enrollment state frame; trusted keys are included only for Approved devices.</summary>
-    public static async Task PushStateAsync(FleetServerState state, DeviceConnection conn, DeviceRecord record)
+    /// <summary>Builds the enrollment state frame for one device. Trusted keys —
+    /// and the approved-peer list the P2P gate consumes — are included only
+    /// for Approved devices.</summary>
+    public static FleetStateFrame BuildStateFrame(FleetServerState state, DeviceRecord record)
     {
         var frame = new FleetStateFrame { State = record.State, ServerTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
         if (record.State == "Approved")
         {
             frame.OperatorPublicKey = state.Registry.OperatorEnabled ? state.OperatorPublicKey : null;
             frame.PanelPublicKey = state.PanelPublicKey;
+            frame.ApprovedPeers = state.Registry.All()
+                .Where(d => d.State == "Approved"
+                            && !d.Code.Equals(record.Code, StringComparison.OrdinalIgnoreCase)
+                            && !string.IsNullOrWhiteSpace(d.PublicKey))
+                .Select(d => new FleetPeerIdentity { Code = d.Code, PublicKey = d.PublicKey })
+                .ToList();
         }
-        await conn.SendAsync(frame);
+        return frame;
+    }
+
+    /// <summary>Sends the enrollment state frame; trusted keys are included only for Approved devices.</summary>
+    public static async Task PushStateAsync(FleetServerState state, DeviceConnection conn, DeviceRecord record)
+    {
+        await conn.SendAsync(BuildStateFrame(state, record));
     }
 
     private static async Task<string?> ReceiveTextAsync(WebSocket ws, CancellationToken ct)

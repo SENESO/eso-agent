@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>P2pProductRun</AssemblyName>
+    <RootNamespace>P2pProductRun</RootNamespace>
+    <Version>0.1.0-run</Version>
+    <!-- Verification harness only. Not part of EsoAgent.sln, never shipped.
+         It composes the PRODUCT P2P components (EsoAgent.Core's P2pNode,
+         P2pConnector, TcpP2pTransport) as separate processes on loopback —
+         the multi-process swarm run the in-sandbox test suite cannot do,
+         because this sandbox intercepts loopback TCP. Run it on a host
+         whose loopback is real (the Simular box). -->
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EsoAgent.Core\EsoAgent.Core.csproj" />
+  </ItemGroup>
+</Project>

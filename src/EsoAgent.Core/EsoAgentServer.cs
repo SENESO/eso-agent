@@ -51,6 +51,19 @@ public sealed class AgentState
     /// against these. Null until the device is approved.</summary>
     public string? OperatorPublicKeySpki { get; set; }
     public string? PanelPublicKeySpki { get; set; }
+    /// <summary>Fleet enrollment state as last reported by a state frame
+    /// (Unknown | Pending | Approved | Rejected). The P2P trust gate reads it.</summary>
+    public volatile string FleetEnrollmentState = "Unknown";
+    /// <summary>The approved-peer set for the P2P gate: device code → base64 SPKI,
+    /// as delivered in the state frame (and persisted with the signer keys so a
+    /// rebooted device keeps its last set until the next frame). Replaced
+    /// atomically per state frame; readers take the snapshot.</summary>
+    public volatile IReadOnlyDictionary<string, string> ApprovedPeers =
+        new Dictionary<string, string>();
+    /// <summary>P2P status line for /api/status (set by the P2P node service).</summary>
+    public string P2pStatus { get; set; } = "p2p disabled";
+    /// <summary>The live P2P node, once the node service has started it.</summary>
+    public P2pNode? P2p { get; set; }
     /// <summary>Desktop session recordings (.esorec) live here (v1.2).</summary>
     public string RecordingsDir => Config.ResolvePath("recordings");
     /// <summary>Latest clock-skew sample vs the fleet server (server − local, seconds),
@@ -129,6 +142,8 @@ public static class EsoAgentServer
         builder.Services.AddHostedService(_ => release);
         if (cfg.Fleet is { Enabled: true } && !string.IsNullOrWhiteSpace(cfg.Fleet.ServerUrl))
             builder.Services.AddHostedService(_ => new FleetClientService(state));
+        if (cfg.P2p is { Enabled: true } && cfg.P2p.ListenPort > 0)
+            builder.Services.AddHostedService(_ => new P2pNodeService(state));
         configureHost?.Invoke(builder);
 
         var cert = CertManager.LoadOrCreate(cfg);

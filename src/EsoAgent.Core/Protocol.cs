@@ -121,6 +121,8 @@ public sealed class StatusResponse
     public bool MeshEnabled { get; set; }
     public string? MeshVirtualIp { get; set; }
     public string MeshStatus { get; set; } = "";
+    /// <summary>P2P layer status line (discovery + peer sessions), same shape as MeshStatus.</summary>
+    public string P2pStatus { get; set; } = "";
     // Owner policy (v1.2): capability toggles + desktop consent policy, so every
     // surface can show what the owner has switched off / gated.
     public CapabilityPolicy Capabilities { get; set; } = new();

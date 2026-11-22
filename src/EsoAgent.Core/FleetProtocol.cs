@@ -59,11 +59,28 @@ public sealed class FleetChallengeResponseFrame
     public string Signature { get; set; } = "";   // device key signature over the nonce bytes
 }
 
+/// <summary>One approved peer's identity as delivered in the state frame: the
+/// P2P layer's trust feed. A device may hold P2P sessions only with peers
+/// listed here (code AND key must both match the peer's signed record and
+/// session open). Delivered only to Approved devices, refreshed by the
+/// periodic state-frame resync.</summary>
+public sealed class FleetPeerIdentity
+{
+    public string Code { get; set; } = "";
+    /// <summary>Base64 SPKI of the peer's device key.</summary>
+    public string PublicKey { get; set; } = "";
+}
+
 public sealed class FleetStateFrame
 {
     public string Type { get; set; } = "state";
     /// <summary>Pending | Approved | Rejected</summary>
     public string State { get; set; } = "Pending";
+    /// <summary>All OTHER Approved devices (code + device key), for the P2P
+    /// approval gate. Empty unless this device is Approved. Older agents
+    /// ignore the field; older servers never send it, and a device that
+    /// has never received it simply holds no P2P sessions.</summary>
+    public List<FleetPeerIdentity> ApprovedPeers { get; set; } = new();
     /// <summary>Trusted OPERATOR key (base64 SPKI), delivered ONLY on approval. Operator tier:
     /// full fleet control incl. operational management — but NOT the owner-reserved actions.</summary>
     public string? OperatorPublicKey { get; set; }

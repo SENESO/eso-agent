@@ -19,6 +19,7 @@ public static class Doctor
             FreeDiskCheck(state),
             FleetLinkCheck(state),
             MeshCheck(state),
+            P2pCheck(state),
             ClockSkewCheck(state),
             AuditErrorsCheck(state),
         };
@@ -94,6 +95,21 @@ public static class Doctor
         return state.MeshVirtualIp != null
             ? new() { Name = "mesh", Status = "pass", Detail = $"virtual ip {state.MeshVirtualIp} · {state.MeshStatus}" }
             : new() { Name = "mesh", Status = "warn", Detail = state.MeshStatus };
+    }
+
+    private static DoctorCheckDto P2pCheck(AgentState state)
+    {
+        if (!state.Config.P2p.Enabled)
+            return new() { Name = "p2p", Status = "pass", Detail = "p2p disabled" };
+        var node = state.P2p;
+        if (node == null)
+            return new() { Name = "p2p", Status = "warn", Detail = state.P2pStatus };
+        return new()
+        {
+            Name = "p2p",
+            Status = "pass",
+            Detail = $"{node.Table.Count} peers known · {node.SessionsAccepted} sessions accepted · {state.P2pStatus}",
+        };
     }
 
     private static DoctorCheckDto ClockSkewCheck(AgentState state)
