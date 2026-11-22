@@ -50,7 +50,21 @@ public sealed class MeshApplier
     private MeshEngineSupervisor? _engine;
     public string Status { get; private set; } = "mesh not configured";
 
+    /// <summary>
+    /// Throttle for the dead-receiver recovery restart (see
+    /// ApplyWindowsCoreAsync): at most one restart per 10 minutes, so a
+    /// genuinely unreachable peer can never turn into a restart loop.
+    /// </summary>
+    private DateTimeOffset _lastDeadReceiverRestart = DateTimeOffset.MinValue;
+
     public MeshApplier(AgentState state) => _state = state;
+
+    /// <summary>Test seam: a supervisor built on fakes (transport/process/runner).</summary>
+    internal MeshApplier(AgentState state, MeshEngineSupervisor engine)
+    {
+        _state = state;
+        _engine = engine;
+    }
 
     /// <summary>
     /// The embedded engine supervisor (Windows), created on first use. The
@@ -100,18 +114,37 @@ public sealed class MeshApplier
 
         var notes = new List<string>();
 
-        // 1) WireGuard config + tunnel reload.
-        try
+        // The model first (pure): both the tunnel and the shims derive from it.
+        var wg = WgIdentity.LoadOrCreate(config.DataDir);
+        var useExit = config.Mesh.UseExitNode && frame.ExitNodeCode != null
+                      && !frame.ExitNodeCode.Equals(_state.Device?.Code, StringComparison.OrdinalIgnoreCase)
+            ? frame.ExitNodeCode : null;
+        var model = WgConfigBuilder.BuildModel(wg.PrivateKeyB64, frame.YourVirtualIp, config.Mesh.ListenPort, frame.Peers, config.Mesh.RelayShimBasePort, useExit);
+        if (useExit != null) notes.Add($"exit-node: routing all traffic via {frame.ExitNodeCode}");
+
+        // 0+1) Relay shims + tunnel. The shims go FIRST (Windows core does
+        // this explicitly; the Linux path below mirrors it): the engine sends
+        // its first handshake initiation the moment it is configured, and on
+        // Windows a packet to a not-yet-bound shim port earns an ICMP Port
+        // Unreachable that kills the engine's IPv4 receive routine outright
+        // (wireguard-go RoutineReceiveIncoming exits on WSAECONNRESET — see
+        // ApplyWindowsCoreAsync). Configuring the tunnel first is what
+        // stranded the laptop mesh at rx 0 forever.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            var wg = WgIdentity.LoadOrCreate(config.DataDir);
-            var useExit = config.Mesh.UseExitNode && frame.ExitNodeCode != null
-                          && !frame.ExitNodeCode.Equals(_state.Device?.Code, StringComparison.OrdinalIgnoreCase)
-                ? frame.ExitNodeCode : null;
-            var model = WgConfigBuilder.BuildModel(wg.PrivateKeyB64, frame.YourVirtualIp, config.Mesh.ListenPort, frame.Peers, config.Mesh.RelayShimBasePort, useExit);
-            notes.Add(await ApplyTunnelAsync(model, ct));
-            if (useExit != null) notes.Add($"exit-node: routing all traffic via {frame.ExitNodeCode}");
+            notes.Add(await ApplyWindowsCoreAsync(model, frame, wg, ct));
         }
-        catch (Exception ex) { notes.Add($"tunnel: {ex.Message}"); }
+        else
+        {
+            try
+            {
+                _shims.Sync(frame.Peers, frame.ServerRelayEndpoint, wg.PublicKeyB64, config.Mesh.ListenPort, config.Mesh.RelayShimBasePort);
+                notes.Add($"relay: {_shims.Status}");
+            }
+            catch (Exception ex) { notes.Add($"relay: {ex.Message}"); }
+            try { notes.Add(await ApplyTunnelAsync(model, ct)); }
+            catch (Exception ex) { notes.Add($"tunnel: {ex.Message}"); }
+        }
 
         // 1b) Exit-node duty (v1.2): when THIS device is the designated exit
         // node, enable forwarding + NAT so peers' default-route traffic can
@@ -180,34 +213,106 @@ public sealed class MeshApplier
             catch (Exception ex) { notes.Add($"firewall: {ex.Message}"); }
         }
 
-        // 4) Relay shims for relayed peers.
-        try
-        {
-            var wg = WgIdentity.LoadOrCreate(config.DataDir);
-            _shims.Sync(frame.Peers, frame.ServerRelayEndpoint, wg.PublicKeyB64, config.Mesh.ListenPort, config.Mesh.RelayShimBasePort);
-            notes.Add($"relay: {_shims.Status}");
-        }
-        catch (Exception ex) { notes.Add($"relay: {ex.Message}"); }
-
         Status = string.Join("; ", notes);
         _state.MeshStatus = Status;
         audit.Write("mesh", $"applied vip={frame.YourVirtualIp} peers={frame.Peers.Count} — {Status}", "ok");
     }
 
+    /// <summary>
+    /// Windows mesh core: relay shims, then the engine, then — only when the
+    /// engine was already running with a dead UDP receiver — one engine
+    /// restart to bring the receiver back.
+    ///
+    /// Root cause it repairs (field-proven 2026-11-21, laptop ESO):
+    /// wireguard-go's IPv4 receive routine (device/receive.go,
+    /// RoutineReceiveIncoming, pinned v0.0.20250522) RETURNS — permanently —
+    /// on any non-temporary receive error. On Windows, sending a UDP packet
+    /// to a port with no listener earns an ICMP Port Unreachable, and the
+    /// next recv on that socket fails with WSAECONNRESET ("An existing
+    /// connection was forcibly closed by the remote host"), which Go reports
+    /// as non-temporary. The old apply order configured the tunnel BEFORE
+    /// syncing the shims, so the engine's first handshake initiation went to
+    /// the not-yet-bound 127.0.0.1:51831: the v4 receiver died in the same
+    /// second at every apply (engine log: "Failed to receive v4 packet ..."
+    /// then "Routine: receive incoming v4 - stopped", never restarted), the
+    /// engine could send but never receive (UAPI: tx 32708 B, rx 0 B,
+    /// last_handshake_time_sec 0), and no restart or re-apply could fix it
+    /// because every re-apply repeated the race (Sync tore the shim sockets
+    /// down first). The shim's relay loop was exonerated by a live probe: a
+    /// plain UdpClient received relay frames fine and forwarding genuine
+    /// box handshake initiations to 127.0.0.1:51820 still produced no
+    /// handshake — the packets had nowhere to land.
+    ///
+    /// The fix has three parts: (1) shims are synced BEFORE the engine is
+    /// configured, so the loopback port is bound when the first initiation
+    /// is sent; (2) RelayShimSet.Sync is idempotent, so re-applies never
+    /// unbind a live shim port; (3) this recovery: if the engine predates
+    /// this apply (already running, or adopted from a previous agent
+    /// lifetime) and UAPI still shows it transmitting without ever having
+    /// received or handshook, the receiver is dead — restart the engine
+    /// once (throttled) so its routines start with the shim sockets bound.
+    /// A genuinely unreachable peer shows the same UAPI signature, so the
+    /// restart is throttled to one per 10 minutes; the cost of a needless
+    /// restart is a few seconds of tunnel flap, and the detector only fires
+    /// for a pre-existing engine, never a freshly started one (whose
+    /// handshake is still in flight).
+    /// </summary>
+    internal async Task<string> ApplyWindowsCoreAsync(WgInterfaceConfig model, FleetMeshFrame frame, WgIdentity wg, CancellationToken ct = default)
+    {
+        var notes = new List<string>();
+
+        // 0) Relay shims FIRST: the loopback ports must be bound before the
+        // engine is configured and starts sending to them.
+        try
+        {
+            _shims.Sync(frame.Peers, frame.ServerRelayEndpoint, wg.PublicKeyB64, _state.Config.Mesh.ListenPort, _state.Config.Mesh.RelayShimBasePort);
+            notes.Add($"relay: {_shims.Status}");
+        }
+        catch (Exception ex) { notes.Add($"relay: {ex.Message}"); }
+
+        // 1) WireGuard config + tunnel reload.
+        var wasRunning = Engine.State == MeshEngineState.Running;
+        try { notes.Add(await ApplyWindowsTunnelAsync(model, ct)); }
+        catch (Exception ex) { notes.Add($"tunnel: {ex.Message}"); }
+
+        // 2) Dead-receiver recovery (see the doc comment above).
+        if (Engine.State == MeshEngineState.Running
+            && (wasRunning || Engine.Adopted)
+            && DeadReceiverSignature(Engine.LastStatus)
+            && (DateTimeOffset.UtcNow - _lastDeadReceiverRestart) >= TimeSpan.FromMinutes(10))
+        {
+            _lastDeadReceiverRestart = DateTimeOffset.UtcNow;
+            try
+            {
+                await Engine.StopAsync(ct);
+                notes.Add(await ApplyWindowsTunnelAsync(model, ct));
+                notes.Add("engine restarted to recover its dead UDP receiver (transmitting, never received, no handshake)");
+            }
+            catch (Exception ex) { notes.Add($"engine receiver recovery failed: {ex.Message}"); }
+        }
+
+        return string.Join("; ", notes);
+    }
+
+    /// <summary>
+    /// The dead-UDP-receiver signature from a UAPI get: at least one peer
+    /// has transmitted but the engine has never received anything from it
+    /// and never completed a handshake. (A genuinely unreachable peer shows
+    /// the same signature — the caller throttles the restart this gates.)
+    /// </summary>
+    internal static bool DeadReceiverSignature(UapiDeviceStatus? status)
+    {
+        if (status == null || !status.Ok) return false;
+        return status.Peers.Any(p => p.TxBytes > 0 && p.RxBytes == 0 && p.LastHandshakeUnixSec == 0);
+    }
+
     private async Task<string> ApplyTunnelAsync(WgInterfaceConfig model, CancellationToken ct)
     {
-        var runner = _state.Platform.ProcessRunner;
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            // Keep the rendered .conf in the data dir for inspection/debugging;
-            // the engine itself is configured from the model over UAPI.
-            var path = Path.Combine(_state.Config.DataDir, "eso0.conf");
-            await File.WriteAllTextAsync(path, WgConfigBuilder.RenderText(model), ct);
-            var result = await Engine.ApplyAsync(model, ct);
-            return result.Summary;
-        }
+            return await ApplyWindowsTunnelAsync(model, ct);
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
+            var runner = _state.Platform.ProcessRunner;
             var wgQuick = FindOnPath("wg-quick");
             if (wgQuick == null) return "tunnel: wg-quick not installed (config generated only)";
             var path = _state.Config.Mesh.WgConfigPath;
@@ -219,6 +324,22 @@ public sealed class MeshApplier
             return up.ExitCode == 0 ? $"tunnel: wg-quick up {name}" : $"tunnel: wg-quick exited {up.ExitCode}: {up.Stderr.Trim()}";
         }
         return "tunnel: unsupported OS";
+    }
+
+    /// <summary>
+    /// The Windows tunnel step (rendered .conf kept in the data dir for
+    /// inspection; the engine itself is configured from the model over
+    /// UAPI). Split out of <see cref="ApplyTunnelAsync"/> because that
+    /// method OS-branches: the Windows core path must reach the engine
+    /// supervisor directly, or on a non-Windows host it would silently take
+    /// the wg-quick branch and never touch the engine.
+    /// </summary>
+    private async Task<string> ApplyWindowsTunnelAsync(WgInterfaceConfig model, CancellationToken ct)
+    {
+        var path = Path.Combine(_state.Config.DataDir, "eso0.conf");
+        await File.WriteAllTextAsync(path, WgConfigBuilder.RenderText(model), ct);
+        var result = await Engine.ApplyAsync(model, ct);
+        return result.Summary;
     }
 
     private static string? FindOnPath(string exe)

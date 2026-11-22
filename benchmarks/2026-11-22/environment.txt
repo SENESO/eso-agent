@@ -1,0 +1,28 @@
+Run environment — 2026-11-22 benchmark run
+==========================================
+Host: Simular box "main" (agent + fleet server + client on one VM)
+OS: Ubuntu 24.04.5 LTS, kernel 6.8.0-142-generic
+CPU: 2 vCPU · RAM: 3,883 MB total, ~800 MB free at probe time
+  (the box was under memory pressure; transfer figures are this-VM,
+  this-day figures and are labelled as such wherever they appear)
+Agent: EsoAgent.Linux 1.2.7 · Fleet server: 1.2.7 · Client: eso bench (v1.2 client)
+Path for all 2026-11-22 bench rows: loopback on the box (127.0.0.1).
+Mesh state at probe time: eso0 up, 10.77.0.2/32 present; laptop peer
+asleep (last handshake 17 h 47 m before the probe) — mesh throughput
+rows are therefore not-yet-measured in this run.
+
+Idle footprint (ps VmRSS, three samples, no sessions active):
+  agent  (EsoAgent.Linux): 247,988 / 262,228 / 262,228 KB  (~242–256 MiB)
+  server (eso-server):     189,692 / 193,588 / 193,596 KB  (~185–189 MiB)
+Idle CPU over a 15 s window: agent 2 ticks, server 1 tick
+  (100 ticks = 1 core-second → ≈0.1% of one core each)
+
+Download sizes — official sources only, HEAD / release API, 2026-11-22:
+  AnyDesk (download.anydesk.com/AnyDesk.exe):            8,554,424 B
+  TeamViewer (dl.teamviewer.com, Setup x64, after 302): 86,399,168 B
+  RustDesk 1.5.3 x86_64.exe (GitHub release asset):     26,233,712 B
+  Tailscale (pkgs.tailscale.com setup):                  1,407,296 B
+    — that file is a stub; the full payload is fetched during install.
+  EsoAgent Windows installer: 124,427,842 B (v1.2.3, measured 2026-11-20)
+  EsoAgent Linux agent .deb:   32,833,564 B (v1.2.4, dist/, 2026-11-22)
+  EsoAgent Windows agent zip: 122,686,555 B (v1.2.4, dist/, 2026-11-22)

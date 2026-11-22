@@ -115,6 +115,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions());
 builder.Services.AddSingleton(state);
 builder.Services.AddHostedService(_ => new UdpRelayService(state)); // DERP-style mesh relay (UDP; idles quietly where UDP is unavailable)
 builder.Services.AddHostedService(_ => new HealthPollerService(state)); // v1.2: health snapshots + alert evaluation
+builder.Services.AddHostedService(_ => new StateFrameResyncService(state)); // v1.2.8: re-push state frames so a frame lost to hibernation heals without a restart
 var serverCert = CertManager.LoadOrCreate(cfg);
 state.CertFingerprint = CertManager.Fingerprint(serverCert);
 builder.WebHost.ConfigureKestrel(kestrel =>

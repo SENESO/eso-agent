@@ -4,6 +4,33 @@ All notable changes to EsoAgent are documented here. The project follows
 semantic versioning; the version lives in one place (`Directory.Build.props`)
 and is stamped on every surface — agent, fleet server, client, and app.
 
+## [1.2.8] — 2026-11-22
+
+Two field defects from the mesh live-verification rounds, both in the
+"silently dead until somebody restarts something" class:
+
+- **Relay shim loops no longer die on a receive error.** The shim's
+  relay loop delivers to the WireGuard engine's port over the same
+  loopback socket the WG loop receives on; a delivery landing before
+  the engine's bind earned the socket an ICMP Port Unreachable, the
+  WG loop's pending receive threw WSAECONNRESET, and the loop exited
+  for good — outbound relay forwarding stopped silently until a
+  quiet-window restart. The loops now disable SIO_UDP_CONNRESET on
+  Windows, treat a receive error as a lost packet instead of a death,
+  and are restarted in place by the shim sync if one ever does exit.
+- **The fleet server re-pushes state frames on a timer.** The
+  connect-time state frame was the only one a device ever received;
+  when the server woke from hibernation it accepted a device's
+  WebSocket but the frame never arrived, and the device looped on its
+  60 s no-state-frame self-heal until the server was restarted by
+  hand. Every 30 s the server now re-pushes the enrollment state
+  frame (and the mesh frame for approved devices) to every connected
+  device, so a lost frame heals on the next tick.
+- Also in this release: the mesh-handshake fix from the 1.2.7 field
+  rounds (relay shims sync before the engine is configured, shim sync
+  is idempotent, a dead engine UDP receiver is recovered) and the
+  published benchmark suite (BENCHMARKS.md).
+
 ## [Unreleased]
 
 UI overhaul Phase 3 — the session experience in the desktop app:

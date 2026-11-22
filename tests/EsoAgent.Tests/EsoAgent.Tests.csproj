@@ -13,5 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\EsoAgent.Core\EsoAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\EsoAgent.Linux\EsoAgent.Linux.csproj" />
+    <ProjectReference Include="..\..\src\EsoAgent.Server\EsoAgent.Server.csproj" />
   </ItemGroup>
 </Project>

@@ -294,3 +294,67 @@ public static class FleetConnectEndpoint
         return Encoding.UTF8.GetString(ms.ToArray());
     }
 }
+
+/// <summary>
+/// Periodic state-frame resync (field defect 2026-11-21): the connect-time
+/// state frame was the only one a device ever received, so losing that
+/// single send stranded the device — the field case was this server
+/// waking from hibernation: it accepted the laptop's WebSocket but the
+/// frame never arrived, the device looped on its 60 s "no state frame"
+/// self-heal, and the mesh only came up after the server was restarted
+/// by hand. This service re-pushes the enrollment state frame (and, for
+/// Approved devices, the mesh frame) to every connected device every
+/// <see cref="Interval"/> — well inside the client's 60 s window — so a
+/// lost frame heals on the next tick instead of needing a restart. Both
+/// frames are handled idempotently by the device (the same code path as
+/// the connect-time push), so the resync changes nothing when the first
+/// frame already landed; it costs a few hundred bytes per device per
+/// tick. It also covers a server that was itself asleep when a device
+/// connected: the audience may have missed the first frame, never the
+/// second.
+/// </summary>
+public sealed class StateFrameResyncService : Microsoft.Extensions.Hosting.BackgroundService
+{
+    /// <summary>Resync cadence — half the client's 60 s no-state-frame window, so one lost tick still heals in time.</summary>
+    public static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
+
+    private readonly FleetServerState _state;
+
+    public StateFrameResyncService(FleetServerState state) => _state = state;
+
+    protected override async Task ExecuteAsync(CancellationToken ct)
+    {
+        try { await Task.Delay(Interval, ct); } catch { return; }
+        while (!ct.IsCancellationRequested)
+        {
+            try { await ResyncOnceAsync(_state); }
+            catch (Exception ex) { _state.Audit.Write("fleet/resync", "resync failed: " + ex.Message, "error"); }
+            try { await Task.Delay(Interval, ct); } catch { return; }
+        }
+    }
+
+    /// <summary>
+    /// One resync tick: re-push the state frame (plus the mesh frame for
+    /// Approved devices) to every connected device. Returns how many
+    /// devices were pushed to. A device whose send fails is skipped —
+    /// its socket is dead and the connect path settles it; one bad
+    /// connection never blocks the others.
+    /// </summary>
+    public static async Task<int> ResyncOnceAsync(FleetServerState state)
+    {
+        var pushed = 0;
+        foreach (var (code, conn) in state.Connections.ToArray())
+        {
+            var record = state.Registry.Find(code);
+            if (record == null) continue;
+            try
+            {
+                await FleetConnectEndpoint.PushStateAsync(state, conn, record);
+                if (record.State == "Approved") await FleetMesh.PushToDeviceAsync(state, record.Code);
+                pushed++;
+            }
+            catch { /* dead socket — the read loop's finally settles it */ }
+        }
+        return pushed;
+    }
+}

@@ -1,0 +1,10 @@
+$ eso bench --device 8AY7-DDZ1     (via fleet relay, 2026-11-22 13:35 EET)
+Benchmarking via fleet (device 8AY7-DDZ1) …
+error: Fleet server returned 401: {"error":"Operator signature invalid."}
+
+Why: since the owner paired the desktop App on 2026-11-20, the fleet
+server's trusted operator key is the App's key on the owner's laptop.
+The box-local CLI's older operator key no longer holds fleet operator
+rights, so a relay bench can only be run from the owner's App/laptop.
+The laptop was asleep during this run; the relay column therefore
+stands at its last measurement (2026-11-18, v1.2.0, BENCHMARKS.md).

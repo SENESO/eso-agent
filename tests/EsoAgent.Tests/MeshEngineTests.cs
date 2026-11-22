@@ -274,7 +274,7 @@ internal sealed class FakeUapiTransport : IUapiTransport
     public List<string> Requests { get; } = new();
     public List<string> SetRequests => Requests.Where(r => r.StartsWith("set=1")).ToList();
 
-    public const string GetResponse =
+    public const string DefaultGetResponse =
         "listen_port=51820\n" +
         "public_key=202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f\n" +
         "endpoint=192.168.1.5:51820\n" +
@@ -283,6 +283,9 @@ internal sealed class FakeUapiTransport : IUapiTransport
         "persistent_keepalive_interval=25\n" +
         "allowed_ip=10.77.0.3/32\n" +
         "errno=0\n\n";
+
+    /// <summary>Overridable per test (e.g. the dead-receiver signature: tx &gt; 0, rx 0, no handshake).</summary>
+    public string GetResponse { get; set; } = DefaultGetResponse;
 
     public Task<string> RequestAsync(string request, CancellationToken ct = default)
     {

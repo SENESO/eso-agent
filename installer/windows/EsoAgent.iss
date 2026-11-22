@@ -22,7 +22,7 @@
 ;     (see CODE_SIGNING.md). Unsigned builds stay unsigned — never fake.
 
 #define AppName "EsoAgent"
-#define AppVersion "1.2.7"
+#define AppVersion "1.2.8"
 #define AppPublisher "EsoAgent"
 #define AppURL "https://github.com/SENESO/eso-agent"
 

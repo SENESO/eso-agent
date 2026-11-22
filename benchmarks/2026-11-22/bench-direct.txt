@@ -1,0 +1,17 @@
+$ eso status
+main (8AY7-DDZ1) — Linux · Ubuntu 24.04.5 LTS
+agent 1.2.7 · uptime 11.09:54:18 · host main · locked: False
+
+$ eso bench            (direct, 127.0.0.1:8737, 2026-11-22 13:35 EET)
+Benchmarking via direct (127.0.0.1:8737) …
+status RTT ×20:        min 308 ms · median 315 ms · p95 528 ms
+exec RTT ×10:          min 5 ms · median 8 ms · p95 388 ms
+upload 8 MiB:          7.2 MiB/s (1.1 s, sha256 verified by commit)
+download 8 MiB:        12.9 MiB/s (0.6 s)
+delta efficiency:      inventory payload 2660 B full → 212 B as delta (92% less on the wire)
+desktop fps (q60):     0.8
+
+$ eso see              (direct, same session)
+SEE — 0 window(s) · tier 1-ui-tree · cost 633 bytes (≈158 tokens)
+(wire cost of the structural answer; the box has no interactive user
+session, so the answer truthfully reports its absence — see BENCHMARKS.md)
