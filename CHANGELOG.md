@@ -26,6 +26,13 @@ Two field defects from the mesh live-verification rounds, both in the
   hand. Every 30 s the server now re-pushes the enrollment state
   frame (and the mesh frame for approved devices) to every connected
   device, so a lost frame heals on the next tick.
+- **A fresh install joins the fleet by itself.** The fleet hub ships
+  pre-configured — as the default in the agent's fleet options and in
+  the config both installers seed — so on first run the agent registers
+  and the app on that machine shows its device code with zero setup.
+  The device lands as Pending; approval still happens in the panel
+  before any command is relayed. A different hub (or none) is one
+  `fleet` section in esoagent.json away.
 - Also in this release: the mesh-handshake fix from the 1.2.7 field
   rounds (relay shims sync before the engine is configured, shim sync
   is idempotent, a dead engine UDP receiver is recovered) and the

@@ -51,16 +51,22 @@ Both installers ask for (or generate) the device's owner password and print
 the address of the device's own panel. The agent runs as a system service
 from then on — no login needed on the device itself.
 
-### Point the device at your fleet
+### The device joins the fleet by itself
 
-In the device's config (`esoagent.json`, in the agent's data folder) set:
+There is nothing to point anywhere. The installer ships with the fleet
+server pre-configured, so on first run the agent registers itself: the
+device appears in the fleet panel as **Pending**, and the app on that
+machine shows its device code (`XXXX-XXXX`) right away.
+
+To run a device against a different fleet server — or no server at all —
+edit `fleet` in the device's config (`esoagent.json`, in the agent's data
+folder) and restart the agent service:
 
 ```json
-{ "fleet": { "url": "https://<your-server>:8740", "name": "laptop" } }
+{ "fleet": { "enabled": true, "serverUrl": "wss://<your-server>:8740/fleet/connect" } }
 ```
 
-Restart the agent service. The device appears in the fleet panel as
-**Pending** with a device code like `XXXX-XXXX`.
+Set `"enabled": false` for a device that should stay standalone.
 
 ## 2. Enroll (approve) a device
 

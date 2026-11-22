@@ -49,8 +49,13 @@ install -m 0755 "$SRC/update-apply.sh" "$INSTALL_DIR/update-apply.sh" 2>/dev/nul
 if [[ -f "$DATA_DIR/esoagent.json" ]]; then
   echo "Existing config preserved (upgrade): $DATA_DIR/esoagent.json - enrollment and settings untouched."
 else
-  FLEET_ENABLED=false
-  [[ -n "$FLEET_URL" ]] && FLEET_ENABLED=true
+  # No --fleet-url given: seed the default hub so a fresh install shows its
+  # device code with zero setup. An explicit --fleet-url always wins.
+  FLEET_ENABLED=true
+  if [[ -z "$FLEET_URL" ]]; then
+    FLEET_URL="wss://100.98.165.106:8740/fleet/connect"
+    [[ -z "$FLEET_FP" ]] && FLEET_FP="9b5c0bcc778ebd660d3997f1d9b6dfcc0eae678b1340b3f6d8dfcbe1d0e849c9"
+  fi
   cat > "$DATA_DIR/esoagent.json" <<EOF
 {
   "port": $PORT,

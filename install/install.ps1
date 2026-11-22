@@ -62,12 +62,20 @@ if (Test-Path $configFile) {
     Write-Host "Existing config preserved (upgrade): $configFile"
     Write-Host "  Enrollment and settings left untouched; defaults NOT reseeded."
 } else {
+    # No -FleetUrl given: seed the default hub so a fresh install shows its
+    # device code with zero setup. An explicit -FleetUrl always wins.
+    $seedUrl = $FleetUrl
+    $seedFingerprint = $FleetFingerprint
+    if (-not $seedUrl) {
+        $seedUrl = "wss://100.98.165.106:8740/fleet/connect"
+        if (-not $seedFingerprint) { $seedFingerprint = "9b5c0bcc778ebd660d3997f1d9b6dfcc0eae678b1340b3f6d8dfcbe1d0e849c9" }
+    }
     $config = [ordered]@{
         port = $Port
         fleet = [ordered]@{
-            enabled = [bool]$FleetUrl
-            serverUrl = $FleetUrl
-            serverFingerprint = $FleetFingerprint
+            enabled = $true
+            serverUrl = $seedUrl
+            serverFingerprint = $seedFingerprint
             enrollmentKey = $EnrollmentKey
         }
         mesh = [ordered]@{ enabled = [bool]$EnableMesh }

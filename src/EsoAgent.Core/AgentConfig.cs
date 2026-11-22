@@ -90,15 +90,30 @@ public sealed class AgentConfig
     }
 }
 
+/// <summary>
+/// The owner's fleet hub, shipped as the default so a fresh install shows its
+/// device code with zero setup: the agent enrolls against this hub on first
+/// run and lands as a Pending device; an operator still has to approve it
+/// before any command is relayed. To run a different hub (or none), set
+/// fleet.serverUrl / fleet.enabled in esoagent.json — an explicit value in
+/// the file always wins over these defaults. If the hub's certificate is
+/// ever rotated, update ServerFingerprint here and in the install scripts.
+/// </summary>
+public static class FleetDefaults
+{
+    public const string ServerUrl = "wss://100.98.165.106:8740/fleet/connect";
+    public const string ServerFingerprint = "9b5c0bcc778ebd660d3997f1d9b6dfcc0eae678b1340b3f6d8dfcbe1d0e849c9";
+}
+
 /// <summary>Fleet enrollment options (in esoagent.json). The agent dials OUT to the
 /// server over WSS; no inbound ports are needed on the device.</summary>
 public sealed class FleetOptions
 {
-    public bool Enabled { get; set; }
+    public bool Enabled { get; set; } = true;
     /// <summary>wss:// URL of the fleet server's /fleet/connect endpoint.</summary>
-    public string? ServerUrl { get; set; }
+    public string? ServerUrl { get; set; } = FleetDefaults.ServerUrl;
     /// <summary>SHA-256 fingerprint of the fleet server's cert (pin). Empty = system validation (fine for a CA cert; set it for self-signed).</summary>
-    public string? ServerFingerprint { get; set; }
+    public string? ServerFingerprint { get; set; } = FleetDefaults.ServerFingerprint;
     /// <summary>Optional pre-approval enrollment key for unattended installs (presented at hello).</summary>
     public string? EnrollmentKey { get; set; }
 }
