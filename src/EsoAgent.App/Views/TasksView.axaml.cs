@@ -224,6 +224,11 @@ public sealed class TaskEditorWindow : Window
         _enabledBox.IsChecked = c.Enabled;
         _errorText.Foreground = Avalonia.Media.Brushes.OrangeRed;
 
+        // Keyboard pass (Phase 6): Esc cancels, and the first field takes
+        // focus on open — the same contract the web dialogs keep.
+        KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape) Close(null); };
+        Opened += (_, _) => _nameBox.Focus();
+
         var save = new Button { Content = Strings.T("Save"), HorizontalAlignment = HorizontalAlignment.Right };
         save.Click += OnSaveClick;
         var cancel = new Button { Content = Strings.T("Cancel"), HorizontalAlignment = HorizontalAlignment.Right };

@@ -174,6 +174,10 @@ public sealed class TunnelEditorWindow : Window
         };
         _errorText.Foreground = Avalonia.Media.Brushes.OrangeRed;
 
+        // Keyboard pass (Phase 6): Esc cancels; first field focused on open.
+        KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape) Close(null); };
+        Opened += (_, _) => _localPortBox.Focus();
+
         var create = new Button { Content = Strings.T("Start"), HorizontalAlignment = HorizontalAlignment.Right };
         create.Click += OnCreateClick;
         var cancel = new Button { Content = Strings.T("Cancel"), HorizontalAlignment = HorizontalAlignment.Right };

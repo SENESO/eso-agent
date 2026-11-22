@@ -656,6 +656,9 @@ public sealed class ConsentForm : Form
         var deny = new Button { Text = TrayStrings.Deny, Width = 120, Height = 36, Location = new Point(265, 196) };
         allow.Click += (_, _) => Answer(true);
         deny.Click += (_, _) => Answer(false);
+        // Keyboard pass (Phase 6): Esc is the CancelButton, and cancel here
+        // means DENY — the safe direction, same as closing the form.
+        CancelButton = deny;
         Controls.Add(allow);
         Controls.Add(deny);
         Controls.Add(_countdown);

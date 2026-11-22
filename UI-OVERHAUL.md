@@ -35,7 +35,14 @@ says otherwise.
   control-pipe action), in-app log viewer replacing the Notepad hand-off,
   consent v2 (named requester + permission rows, AR/EN), tray language
   table + toggle. F13 stays 1 click.
-- **Phase 6 (i18n, a11y, verification):** pending.
+- **Phase 6 (i18n, a11y, verification):** done 2026-11-22 —
+  BUILD-REPORT.md §18. Both panels' dictionaries grew to full body
+  coverage (fleet 310 keys, dashboard 241, Arabic complete for every
+  key); tray/consent localized in Phase 5; keyboard pass done; F-flows
+  re-measured by construction (F10/F11/F12/F13/F14 all at target). The
+  screenshot set for the owner's verdict could not be captured in the
+  build sandbox (no display) — it is listed in §18 for the next owner
+  session; that is the one exit item that remains open.
 
 ---
 

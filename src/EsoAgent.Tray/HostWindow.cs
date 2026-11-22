@@ -110,6 +110,7 @@ public sealed class HostWindow : Form
         _killButton.Click += (_, _) => _toggleLock();
         var closeButton = new Button { Text = TrayStrings.Close, AutoSize = true };
         closeButton.Click += (_, _) => Close();
+        CancelButton = closeButton; // Esc closes the window (Phase 6 keyboard pass)
         buttonRow.Controls.Add(_killButton);
         buttonRow.Controls.Add(closeButton);
         root.Controls.Add(buttonRow);
