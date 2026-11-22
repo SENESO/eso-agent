@@ -4,6 +4,48 @@ All notable changes to EsoAgent are documented here. The project follows
 semantic versioning; the version lives in one place (`Directory.Build.props`)
 and is stamped on every surface — agent, fleet server, client, and app.
 
+## [1.3.0] — 2026-11-22
+
+Devices no longer need the fleet server to find or reach each other.
+
+- **Peer-to-peer is now the preferred path.** Devices discover each
+  other by device code through a distributed hash table — no central
+  registry — using signed records that bind a code to its device key,
+  so a record cannot be forged. Sessions between devices are encrypted
+  end to end (ECDH + AES-GCM) and run direct when they can, through
+  another approved device as relay when they cannot. Chunked transfers
+  carry a signed manifest with a hash per chunk; a swapped or altered
+  chunk is refused. Relays see ciphertext only and cannot forge
+  commands.
+- **The fleet server is now bootstrap + fallback, not the only road.**
+  It introduces devices that have never met, holds the approval list,
+  and carries a session automatically when no peer path exists. A
+  device that has met peers before rejoins through its saved peer
+  cache with no server at all. Approval still gates everything: a
+  device holds peer sessions only with devices the owner approved.
+- **Zero-config first run carries over from 1.2.8** — a fresh install
+  still registers by itself and shows its device code immediately.
+- **The finished UI overhaul (Phases 4–6).** Fleet panel: an Updates
+  tab with rollouts to picked devices, a full Tasks editor, live
+  Tunnels, and session Recordings with an in-browser player; schedules
+  are edited in the UI instead of by hand in the config file. On the
+  device: a host window with the device code, status and update
+  apply, a built-in log viewer, and consent prompts that name who is
+  asking, in Arabic and English. Both panels are fully Arabic.
+- **The Windows package is half its old size** — 122.7 MB down to
+  59.7 MB. The service, tray and app now share one runtime folder
+  instead of each carrying a private copy of the framework.
+- **H.264 desktop encode, groundwork.** The tray probes for a
+  hardware H.264 encoder and offers the codec when the probe passes;
+  it activates only for a client that offers it back. Decoding H.264
+  in the desktop app is still a follow-up.
+- **One manual reinstall for Windows devices on 1.2.8 or older.**
+  Because the Windows payload changed from single files to a shared
+  folder, the automatic update cannot land this release: it rolls
+  back unharmed but never succeeds. Reinstall once by hand; later
+  updates are automatic again. Linux (server and agent) is
+  unaffected — it still updates by a single-binary swap.
+
 ## [1.2.8] — 2026-11-22
 
 Two field defects from the mesh live-verification rounds, both in the

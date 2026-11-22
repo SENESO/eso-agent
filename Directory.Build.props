@@ -2,7 +2,7 @@
   <PropertyGroup>
     <!-- THE product version. One source for agent, server, client, app,
          tray and installers (item 45). Bump here only. -->
-    <Version>1.2.8</Version>
+    <Version>1.3.0</Version>
     <!-- Assembly/File/Informational versions DERIVE from <Version>: a
          release bump edits <Version> (and the installer .iss) and every
          stamped surface follows. These were once pinned at 1.2.1 while
