@@ -114,28 +114,56 @@ public static class WgConfigBuilder
 /// allows on top. WireGuard AllowedIPs stay full-mesh (cryptokey routing is not
 /// a port firewall) — the port-level policy lives in this firewall plan, which
 /// the agent applies with the platform firewall.
+///
+/// The default posture also carries what the mesh data plane itself needs
+/// (§27, field-proven 2026-11-23): the P2P port (8742 — discovery and
+/// sessions over the mesh bootstrap route), ICMP echo (diagnostics — a
+/// ping that can never arrive cannot distinguish "tunnel down" from
+/// "firewall closed"), and return traffic for connections the device
+/// itself initiated (a bare RST/SYN-ACK reply to an outbound SYN was
+/// dropped by the plan's own DROP — the plan only ever allowed the
+/// agent port as a destination, and a reply's destination is the
+/// outbound socket's ephemeral port). The allow-list stays explicit:
+/// named ports only, mesh sources only.
 /// </summary>
 public static class AclCompiler
 {
     public sealed record DeviceView(string Code, string VirtualIp, IReadOnlyList<string> Groups);
 
-    public static Dictionary<string, MeshFirewallPlan> Compile(IReadOnlyList<DeviceView> devices, IReadOnlyList<AclRule> rules, int agentPort)
+    /// <summary>Windows dynamic (ephemeral) port range — the destination
+    /// ports of reply traffic for outbound connections. Linux renderers
+    /// use conntrack state instead and ignore the range.</summary>
+    public const string ReturnTrafficPortRange = "49152-65535";
+
+    /// <summary>ICMP type carried in <see cref="MeshFirewallRule.Port"/>
+    /// for icmp rules: 8 = echo request. Renderers must emit it as the
+    /// ICMP type, never as a port (old renderers fail such a rule
+    /// closed: netsh rejects "ICMP", iptables rejects --dport with -p
+    /// icmp — no over-broad rule can result).</summary>
+    public const int IcmpEchoRequestType = 8;
+
+    public static Dictionary<string, MeshFirewallPlan> Compile(IReadOnlyList<DeviceView> devices, IReadOnlyList<AclRule> rules, int agentPort, int p2pPort = P2pDefaults.ListenPort)
     {
         var plans = devices.ToDictionary(d => d.Code, d => new MeshFirewallPlan { DeviceCode = d.Code });
 
-        void AddAllow(string targetCode, string fromCidr, int port, string note)
+        void AddAllow(string targetCode, string fromCidr, int port, string note, string protocol = "tcp", bool returnTraffic = false, string? portRange = null)
         {
             if (!plans.TryGetValue(targetCode, out var plan)) return;
-            if (plan.AllowInbound.Any(r => r.FromCidr == fromCidr && r.Port == port && r.Protocol == "tcp")) return;
-            plan.AllowInbound.Add(new MeshFirewallRule { FromCidr = fromCidr, Port = port, Protocol = "tcp", Note = note });
+            if (plan.AllowInbound.Any(r => r.FromCidr == fromCidr && r.Port == port && r.Protocol == protocol && r.ReturnTraffic == returnTraffic)) return;
+            plan.AllowInbound.Add(new MeshFirewallRule { FromCidr = fromCidr, Port = port, Protocol = protocol, Note = note, ReturnTraffic = returnTraffic, PortRange = portRange });
         }
 
-        // Default posture: agent port reachable from all fleet members.
+        // Default posture: agent port + P2P port + ICMP echo + return
+        // traffic, reachable from all fleet members.
         foreach (var target in devices)
         foreach (var source in devices)
         {
             if (source.Code == target.Code) continue;
             AddAllow(target.Code, $"{source.VirtualIp}/32", agentPort, "default: fleet agent port");
+            AddAllow(target.Code, $"{source.VirtualIp}/32", p2pPort, "default: fleet p2p port");
+            AddAllow(target.Code, $"{source.VirtualIp}/32", IcmpEchoRequestType, "default: mesh diagnostics (icmp echo)", protocol: "icmp");
+            AddAllow(target.Code, $"{source.VirtualIp}/32", 49152, "default: return traffic for outbound mesh connections",
+                returnTraffic: true, portRange: ReturnTrafficPortRange);
         }
 
         IEnumerable<DeviceView> Expand(string selector)
@@ -231,10 +259,19 @@ public static class RelayFraming
 }
 
 /// <summary>
+/// <summary>
 /// Turns a compiled firewall plan into platform commands (pure; the applier runs
 /// them through the audited process runner). Windows: netsh rules all named
 /// "EsoAgentMesh" so one delete clears the set. Linux: a dedicated iptables
 /// chain jumped to from INPUT for mesh-range sources only.
+///
+/// Rule shapes (§27): icmp rules carry the ICMP type in Port (8 = echo
+/// request) and render as an echo-only allow, never as a port; return-traffic
+/// rules render as a conntrack ESTABLISHED,RELATED accept on Linux and as an
+/// allow for the dynamic port range on Windows; a PortRange renders as a port
+/// range on both. Renderers never emit Port as a port for an icmp rule —
+/// an old renderer would have failed such a rule closed, and this one must
+/// not silently widen it.
 /// </summary>
 public static class MeshFirewallCommands
 {
@@ -249,10 +286,20 @@ public static class MeshFirewallCommands
             var args = new List<string>
             {
                 "netsh", "advfirewall", "firewall", "add", "rule", "name=EsoAgentMesh",
-                "dir=in", "action=allow", $"protocol={rule.Protocol.ToUpperInvariant()}",
+                "dir=in", "action=allow",
                 $"remoteip={rule.FromCidr}",
             };
-            if (rule.Port > 0) args.Add($"localport={rule.Port}");
+            if (rule.Protocol.Equals("icmp", StringComparison.OrdinalIgnoreCase))
+            {
+                // Echo request only (type 8); never a port.
+                args.Add($"protocol=icmpv4:{rule.Port},any");
+            }
+            else
+            {
+                args.Add($"protocol={rule.Protocol.ToUpperInvariant()}");
+                var localPort = rule.PortRange ?? (rule.Port > 0 ? rule.Port.ToString() : null);
+                if (localPort != null) args.Add($"localport={localPort}");
+            }
             commands.Add(args.ToArray());
         }
         return commands;
@@ -265,10 +312,27 @@ public static class MeshFirewallCommands
             new[] { "iptables", "-N", "ESOAGENT_MESH" },
             new[] { "iptables", "-F", "ESOAGENT_MESH" },
         };
+        if (plan.AllowInbound.Any(r => r.ReturnTraffic))
+        {
+            // Replies to connections this device initiated (RST/SYN-ACK to an
+            // outbound SYN): the plan's own DROP would eat them without this.
+            // The box's outer firewall carries the same rule, but the plan
+            // must be self-contained — a plain Linux host has only this chain.
+            commands.Add(new[] { "iptables", "-A", "ESOAGENT_MESH", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT" });
+        }
         foreach (var rule in plan.AllowInbound)
         {
+            if (rule.ReturnTraffic) continue; // covered by the conntrack rule above; PortRange is Windows-only
             var args = new List<string> { "iptables", "-A", "ESOAGENT_MESH", "-s", rule.FromCidr, "-p", rule.Protocol };
-            if (rule.Port > 0) { args.Add("--dport"); args.Add(rule.Port.ToString()); }
+            if (rule.Protocol.Equals("icmp", StringComparison.OrdinalIgnoreCase))
+            {
+                args.Add("--icmp-type"); args.Add(rule.Port.ToString()); // Port carries the ICMP type (8 = echo request)
+            }
+            else if (rule.PortRange != null)
+            {
+                args.Add("--dport"); args.Add(rule.PortRange.Replace('-', ':'));
+            }
+            else if (rule.Port > 0) { args.Add("--dport"); args.Add(rule.Port.ToString()); }
             args.Add("-j"); args.Add("ACCEPT");
             commands.Add(args.ToArray());
         }

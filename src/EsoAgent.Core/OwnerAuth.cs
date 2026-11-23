@@ -59,8 +59,7 @@ public static class OwnerPassword
     /// <summary>Writes owner.json (used by the heads' `set-owner-password` command and installers).</summary>
     public static void SaveRecord(string path, OwnerPasswordRecord record)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        File.WriteAllText(path, JsonSerializer.Serialize(record, EsoJson.Options));
+        StateFile.WriteJson(path, record);
     }
 }
 
@@ -75,9 +74,13 @@ public sealed class OwnerAuthStore
     public void Load(string path)
     {
         _path = path;
-        if (!File.Exists(path)) { _record = null; return; }
-        try { _record = JsonSerializer.Deserialize<OwnerPasswordRecord>(File.ReadAllText(path), EsoJson.Options); }
-        catch { _record = null; }
+        // Through StateFile (defect-8): a torn owner.json recovers the
+        // record from its last-good backup instead of silently
+        // un-configuring owner auth; a doubly-corrupt file is
+        // quarantined (bytes preserved), never silently replaced.
+        var status = StateFile.TryReadJson<OwnerPasswordRecord>(path, out var record);
+        _record = record;
+        if (status == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(path);
     }
 
     public bool Verify(string password) => _record != null && OwnerPassword.Verify(password, _record);

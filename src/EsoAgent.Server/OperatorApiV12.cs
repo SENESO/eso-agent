@@ -127,6 +127,82 @@ public static class FleetOperatorApiV12
             return Results.Json(info, EsoJson.Options);
         });
 
+        // ----- chunked update-package upload (v1.3.2, BUILD-REPORT §25 follow-up) -----
+        // The single-shot PUT above signs ONCE and then uploads for ~15 min on a
+        // slow link, so the operator signature is stale (120 s skew) by the time
+        // the server verifies it (401 "Operator signature invalid"). Here each
+        // 256 KiB chunk is its OWN signed request — fresh timestamp, small body —
+        // so the whole upload can take as long as the link needs, resumes from
+        // the server's received offset after any interruption, and the commit
+        // re-verifies the whole-file hash before promoting. Same operator auth
+        // (CheckOperator over the chunk bytes + the sha256/offset/total query,
+        // which the signature covers), same store, same audit shape.
+        app.MapGet("/fleet/update/package/upload-state", async (HttpContext ctx) =>
+        {
+            var body = await FleetOperatorApi.ReadBodyAsync(ctx);
+            if (!FleetOperatorApi.CheckOperator(ctx, state, body, out var error)) return FleetOperatorApi.Denied(error);
+            var s = state.Packages.GetChunkedState();
+            return Results.Json(new ChunkedUploadStateDto
+            {
+                Sha256 = s?.Sha256 ?? "",
+                TotalSize = s?.TotalSize ?? 0,
+                Received = s?.Received ?? 0,
+            }, EsoJson.Options);
+        });
+
+        app.MapPut("/fleet/update/package/chunk", async (HttpContext ctx) =>
+        {
+            var body = await FleetOperatorApi.ReadBodyAsync(ctx);
+            if (!FleetOperatorApi.CheckOperator(ctx, state, body, out var error)) return FleetOperatorApi.Denied(error);
+            var sha = ctx.Request.Query["sha256"].ToString();
+            if (string.IsNullOrWhiteSpace(sha) ||
+                !long.TryParse(ctx.Request.Query["offset"].ToString(), out var offset) ||
+                !long.TryParse(ctx.Request.Query["total"].ToString(), out var total))
+                return Results.Json(new ErrorResponse { Error = "Chunk needs ?sha256=, ?offset= and ?total=." }, EsoJson.Options, statusCode: 400);
+            try
+            {
+                var received = state.Packages.AppendChunk(body, offset, sha, total);
+                return Results.Json(new ChunkedUploadStateDto { Sha256 = sha.Trim().ToLowerInvariant(), TotalSize = total, Received = received }, EsoJson.Options);
+            }
+            catch (ChunkOffsetException ex)
+            {
+                return Results.Json(new ErrorResponse { Error = ex.Message }, EsoJson.Options, statusCode: 409);
+            }
+            catch (InvalidDataException ex)
+            {
+                return Results.Json(new ErrorResponse { Error = ex.Message }, EsoJson.Options, statusCode: 409);
+            }
+        });
+
+        app.MapPost("/fleet/update/package/commit", async (HttpContext ctx) =>
+        {
+            var body = await FleetOperatorApi.ReadBodyAsync(ctx);
+            if (!FleetOperatorApi.CheckOperator(ctx, state, body, out var error)) return FleetOperatorApi.Denied(error);
+            var req = JsonSerializer.Deserialize<ChunkedUploadCommitRequest>(body, EsoJson.Options);
+            if (req == null || string.IsNullOrWhiteSpace(req.Sha256) || req.Size <= 0)
+                return Results.Json(new ErrorResponse { Error = "Commit needs { sha256, size }." }, EsoJson.Options, statusCode: 400);
+            try
+            {
+                var info = state.Packages.CommitChunked(req.Sha256, req.Size, "operator");
+                state.Audit.Write("fleet/rollout", $"update package uploaded (operator, chunked) sha256={info.Sha256} size={info.Size}", "ok");
+                state.Activity.Add("operator", "rollout", $"Update package uploaded (chunked, sha256 {info.Sha256[..12]}…, {info.Size} bytes)", "ok");
+                return Results.Json(info, EsoJson.Options);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or FileNotFoundException)
+            {
+                return Results.Json(new ErrorResponse { Error = ex.Message }, EsoJson.Options, statusCode: 400);
+            }
+        });
+
+        app.MapDelete("/fleet/update/package/upload", async (HttpContext ctx) =>
+        {
+            var body = await FleetOperatorApi.ReadBodyAsync(ctx);
+            if (!FleetOperatorApi.CheckOperator(ctx, state, body, out var error)) return FleetOperatorApi.Denied(error);
+            state.Packages.AbortChunked();
+            state.Audit.Write("fleet/rollout", "chunked update-package upload aborted (operator)", "ok");
+            return Results.Json(new { aborted = true }, EsoJson.Options);
+        });
+
         // The agent's download: authorized by the per-rollout token alone (the
         // agent holds no operator credential; the token is minted per rollout
         // and the update-fetch the agent acts on is itself signed).

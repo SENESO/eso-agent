@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using EsoAgent.Core;
 
 namespace EsoAgent.App;
 
@@ -19,24 +20,34 @@ public static class AppSettingsStore
 
     public static JsonObject Load(string settingsPath)
     {
-        try
-        {
-            if (File.Exists(settingsPath)
-                && JsonNode.Parse(File.ReadAllText(settingsPath)) is JsonObject obj)
-                return obj;
-        }
-        catch { /* fall through to empty */ }
-        return new JsonObject();
+        // Backup-aware (defect-8): main first, then the last-good
+        // backup — a torn settings file no longer silently wipes the
+        // language, favourites and recents it carried.
+        return ParseObject(ReadFile(settingsPath))
+               ?? ParseObject(ReadFile(StateFile.BackupPath(settingsPath)))
+               ?? new JsonObject();
+    }
+
+    private static string? ReadFile(string path)
+    {
+        try { return File.Exists(path) ? File.ReadAllText(path) : null; }
+        catch { return null; }
+    }
+
+    private static JsonObject? ParseObject(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        try { return JsonNode.Parse(text) as JsonObject; }
+        catch { return null; }
     }
 
     public static void Update(string settingsPath, Action<JsonObject> edit)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
             var obj = Load(settingsPath);
             edit(obj);
-            File.WriteAllText(settingsPath, obj.ToJsonString());
+            StateFile.WriteText(settingsPath, obj.ToJsonString());
         }
         catch { }
     }

@@ -76,10 +76,10 @@ public sealed partial class ActivityView : UserControl
                 StateText.Text = $"Direct device audit log · {lines.Count} line(s) · updated {DateTime.Now:T}";
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            BodyText.Text = $"Activity failed: {ex.Message}";
-            StateText.Text = "Failed";
+            BodyText.Text = Strings.T("ActivityLoadFailed");
+            StateText.Text = Strings.T("FailedWord");
         }
         finally { RefreshButton.IsEnabled = true; }
     }

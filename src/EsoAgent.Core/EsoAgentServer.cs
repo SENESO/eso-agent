@@ -148,7 +148,15 @@ public static class EsoAgentServer
 
         var cert = CertManager.LoadOrCreate(cfg);
         state.CertFingerprint = CertManager.Fingerprint(cert);
-        var bindAddresses = NetHelpers.ResolveBindAddresses(cfg);
+        // Mesh VIP (§27): the applier persists the assigned VIP in
+        // mesh.json on every frame; bind the API to it now, before the
+        // first frame of this lifetime arrives — Kestrel binds once at
+        // host build, and a VIP assigned mid-lifetime binds at the next
+        // agent restart (the applier audits that when it happens).
+        // Clients pin the cert by fingerprint, so no SAN change is needed.
+        var meshVip = MeshFrameStore.TryReadVip(cfg.DataDir);
+        if (meshVip != null) state.MeshVirtualIp = meshVip;
+        var bindAddresses = NetHelpers.ResolveBindAddresses(cfg, meshVip != null ? new[] { meshVip } : null);
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             NetHelpers.ApplyRequestBodyLimit(kestrel); // PUT /api/update/package carries ~41 MB packages (NetHelpers.MaxRequestBodyBytes)

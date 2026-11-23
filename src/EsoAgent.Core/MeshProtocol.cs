@@ -24,6 +24,27 @@ public sealed class MeshFirewallRule
     public int Port { get; set; } // 0 = any port
     public string Protocol { get; set; } = "tcp";
     public string Note { get; set; } = "";
+    /// <summary>
+    /// Port range for this rule (e.g. "49152-65535"), when it covers more
+    /// than the single <see cref="Port"/>. Renderers use the range when
+    /// present; agents that predate the range field ignore it and use
+    /// <see cref="Port"/> — so Port is always set to the range's first
+    /// port, which keeps an old renderer narrow (fail-closed) instead of
+    /// over-broad.
+    /// </summary>
+    public string? PortRange { get; set; }
+    /// <summary>
+    /// True when this rule admits REPLY traffic for connections the device
+    /// itself initiated (the mesh data-plane fix, §27): on Linux the
+    /// renderer emits a conntrack ESTABLISHED,RELATED accept; on Windows
+    /// it emits an allow for the dynamic port range (the firewall's own
+    /// stateful allowance does not cover the Wintun adapter's inbound
+    /// path — field-proven 2026-11-23: a bare RST reply to an outbound
+    /// SYN was dropped until an explicit allow existed). Old agents ignore
+    /// the flag and apply the single <see cref="Port"/> allow — narrow,
+    /// never wider than the rule.
+    /// </summary>
+    public bool ReturnTraffic { get; set; }
 }
 
 /// <summary>Per-device compiled firewall plan (default posture: deny inbound except these).</summary>
@@ -57,6 +78,40 @@ public sealed class FleetMeshFrame
     public string? ExitNodeCode { get; set; }
     public string? ExitNodeVirtualIp { get; set; }
     public bool YouAreExitNode { get; set; }
+}
+
+/// <summary>
+/// Reads back the mesh frame the applier persists (<c>mesh.json</c> in
+/// the data dir) — the one durable record of this device's mesh virtual
+/// IP. Used at agent startup so the API can bind the mesh VIP before
+/// the first fleet frame of this lifetime arrives (§27): Kestrel binds
+/// once at host build, and the frame arrives seconds later, so without
+/// the persisted VIP the API would stay unreachable over the mesh
+/// until the next agent restart. Tolerant by design: a missing or torn
+/// file is null, never an exception (the applier rewrites the file on
+/// the next frame anyway).
+/// </summary>
+public static class MeshFrameStore
+{
+    public const string FileName = "mesh.json";
+
+    public static string? TryReadVip(string dataDir)
+    {
+        try
+        {
+            var path = Path.Combine(dataDir, FileName);
+            if (!File.Exists(path)) return null;
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (!prop.Name.Equals("yourVirtualIp", StringComparison.OrdinalIgnoreCase)) continue;
+                var value = prop.Value.GetString();
+                return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            }
+            return null;
+        }
+        catch { return null; }
+    }
 }
 
 /// <summary>An enrollment pre-approval key (unattended installs). Only the hash is stored server-side.</summary>

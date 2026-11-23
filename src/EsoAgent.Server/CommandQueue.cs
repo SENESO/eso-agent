@@ -37,19 +37,15 @@ public sealed class CommandQueueStore
 
     private void Load()
     {
-        try
-        {
-            if (File.Exists(_path))
-                _records = JsonSerializer.Deserialize<QueueFile>(File.ReadAllText(_path), EsoJson.Options)?.Commands ?? new();
-        }
-        catch { _records = new(); }
+        // Backup-aware (defect-8), same policy as the other stores.
+        var status = StateFile.TryReadJson<QueueFile>(_path, out var file);
+        if (file != null) _records = file.Commands ?? new();
+        else if (status == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(_path);
     }
 
     private void Save()
     {
-        var tmp = _path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(new QueueFile { Commands = _records }, EsoJson.Options));
-        File.Move(tmp, _path, overwrite: true);
+        StateFile.WriteText(_path, JsonSerializer.Serialize(new QueueFile { Commands = _records }, EsoJson.Options));
     }
 
     public QueuedCommandRecord Enqueue(QueuedCommandRecord record)

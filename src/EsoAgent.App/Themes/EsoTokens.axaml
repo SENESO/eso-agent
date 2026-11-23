@@ -31,6 +31,9 @@
       <SolidColorBrush x:Key="EsoMutedBrush" Color="{StaticResource EsoMutedColor}" />
       <SolidColorBrush x:Key="EsoAccentBrush" Color="{StaticResource EsoAccentColor}" />
       <SolidColorBrush x:Key="EsoOnAccentBrush" Color="{StaticResource EsoOnAccentColor}" />
+      <SolidColorBrush x:Key="EsoOkBrush" Color="{StaticResource EsoOkColor}" />
+      <SolidColorBrush x:Key="EsoWarnBrush" Color="{StaticResource EsoWarnColor}" />
+      <SolidColorBrush x:Key="EsoBadBrush" Color="{StaticResource EsoBadColor}" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Light">
       <Color x:Key="EsoBgColor">#F7F5F1</Color>
@@ -56,6 +59,9 @@
       <SolidColorBrush x:Key="EsoMutedBrush" Color="{StaticResource EsoMutedColor}" />
       <SolidColorBrush x:Key="EsoAccentBrush" Color="{StaticResource EsoAccentColor}" />
       <SolidColorBrush x:Key="EsoOnAccentBrush" Color="{StaticResource EsoOnAccentColor}" />
+      <SolidColorBrush x:Key="EsoOkBrush" Color="{StaticResource EsoOkColor}" />
+      <SolidColorBrush x:Key="EsoWarnBrush" Color="{StaticResource EsoWarnColor}" />
+      <SolidColorBrush x:Key="EsoBadBrush" Color="{StaticResource EsoBadColor}" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
   <!-- spacing (4-pt scale) and radii, shared by both themes -->

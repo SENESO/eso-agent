@@ -97,13 +97,22 @@ public class AclCompilerTests
     private static readonly AclCompiler.DeviceView C = new("CCCC-3333", "10.77.0.4", new[] { "servers" });
 
     [Fact]
-    public void DefaultPosture_AgentPortOpenBetweenMembersOnly()
+    public void DefaultPosture_OpensAgentAndP2pPorts_IcmpEcho_AndReturnTraffic()
     {
+        // §27: the default posture carries what the mesh data plane itself
+        // needs — the agent port, the P2P port, ICMP echo for diagnostics,
+        // and return traffic for connections the device initiated (a bare
+        // RST reply to an outbound SYN was dropped by the old plan's DROP).
+        // The allow-list stays explicit: named ports only, mesh sources only.
         var plans = AclCompiler.Compile(new[] { A, B }, Array.Empty<AclRule>(), agentPort: 8737);
         var planB = plans["BBBB-2222"];
-        Assert.Contains(planB.AllowInbound, r => r.FromCidr == "10.77.0.2/32" && r.Port == 8737);
-        Assert.DoesNotContain(planB.AllowInbound, r => r.Port != 8737);
-        // No self-rules.
+        Assert.Contains(planB.AllowInbound, r => r.FromCidr == "10.77.0.2/32" && r.Port == 8737 && r.Protocol == "tcp" && !r.ReturnTraffic);
+        Assert.Contains(planB.AllowInbound, r => r.FromCidr == "10.77.0.2/32" && r.Port == 8742 && r.Protocol == "tcp" && !r.ReturnTraffic);
+        Assert.Contains(planB.AllowInbound, r => r.FromCidr == "10.77.0.2/32" && r.Port == 8 && r.Protocol == "icmp");
+        Assert.Contains(planB.AllowInbound, r => r.FromCidr == "10.77.0.2/32" && r.ReturnTraffic && r.PortRange == "49152-65535");
+        // Nothing else: no other ports, no self-rules.
+        Assert.DoesNotContain(planB.AllowInbound, r => r is { Protocol: "tcp", ReturnTraffic: false } && r.Port is not (8737 or 8742));
+        Assert.DoesNotContain(planB.AllowInbound, r => r.Protocol != "tcp" && r.Protocol != "icmp");
         Assert.DoesNotContain(plans["AAAA-1111"].AllowInbound, r => r.FromCidr == "10.77.0.2/32");
     }
 

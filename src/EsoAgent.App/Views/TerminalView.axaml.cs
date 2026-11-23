@@ -122,7 +122,7 @@ public sealed partial class TerminalView : UserControl
                     else state.UseFallback = true;
                 }
             }
-            catch (Exception ex) { state.Note = ex.Message; }
+            catch (Exception) { state.Note = Strings.T("SessionStartFailedPlain"); }
         }
         if (state.Created && state.Running) StartPolling();
         UpdateChrome();
@@ -304,7 +304,7 @@ public sealed partial class TerminalView : UserControl
             }
             else _ = PollAsync();   // don't wait for the next tick to show the echo
         }
-        catch (Exception ex) { state.Note = ex.Message; UpdateChrome(); }
+        catch (Exception) { state.Note = Strings.T("SessionStartFailedPlain"); UpdateChrome(); }
     }
 
     // ---------- one-shot fallback (the pre-Phase-3 behaviour) ----------
@@ -353,7 +353,7 @@ public sealed partial class TerminalView : UserControl
             }
         }
         catch (OperationCanceledException) { Append("\n[cancelled]\n"); }
-        catch (Exception ex) { Append($"\n[error: {ex.Message}]\n"); }
+        catch (Exception) { Append("\n[error: command failed to run]\n"); }
         finally
         {
             _running.Dispose();

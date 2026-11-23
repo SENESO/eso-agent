@@ -198,7 +198,7 @@ public sealed partial class FilesView : UserControl
             EntriesList.ItemsSource = list.Entries.Select(e => new FileEntryItem { Entry = e }).ToList();
             StateText.Text = $"{list.Entries.Count} item(s) · {DateTime.Now:T}";
         }
-        catch (Exception ex) { StateText.Text = $"List failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("LoadFailedPlain"); }
     }
 
     private async void OnRefreshClick(object? sender, RoutedEventArgs e) => await LoadAsync(_path);
@@ -232,7 +232,7 @@ public sealed partial class FilesView : UserControl
             StateText.Text = replies[0].Ok ? $"Deleted {item.Entry.Name}." : $"Delete failed: {replies[0].Error ?? replies[0].Text}";
             if (replies[0].Ok) await LoadAsync(_path);
         }
-        catch (Exception ex) { StateText.Text = $"Delete failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("ActionFailedPlain"); }
     }
 
     private async void OnRenameClick(object? sender, RoutedEventArgs e)
@@ -248,7 +248,7 @@ public sealed partial class FilesView : UserControl
             StateText.Text = replies[0].Ok ? $"Renamed to {name}." : $"Rename failed: {replies[0].Error ?? replies[0].Text}";
             if (replies[0].Ok) await LoadAsync(_path);
         }
-        catch (Exception ex) { StateText.Text = $"Rename failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("ActionFailedPlain"); }
     }
 
     private async void OnMkdirClick(object? sender, RoutedEventArgs e)
@@ -263,7 +263,7 @@ public sealed partial class FilesView : UserControl
             StateText.Text = replies[0].Ok ? $"Created folder {name}." : $"New folder failed: {replies[0].Error ?? replies[0].Text}";
             if (replies[0].Ok) await LoadAsync(_path);
         }
-        catch (Exception ex) { StateText.Text = $"New folder failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("ActionFailedPlain"); }
     }
 
     private static string JoinRemote(string dir, string name)
@@ -319,7 +319,7 @@ public sealed partial class FilesView : UserControl
                 items.Add(new LocalEntryItem { Name = f.Name, FullPath = f.FullName, IsDir = false, Size = f.Length });
             LocalList.ItemsSource = items;
         }
-        catch (Exception ex) { StateText.Text = $"Local list failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("LoadFailedPlain"); }
     }
 
     private void OnLocalUpClick(object? sender, RoutedEventArgs e)

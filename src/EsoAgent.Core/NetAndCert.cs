@@ -110,14 +110,38 @@ public static class NetHelpers
     /// Tailscale address(es) plus loopback. Never 0.0.0.0 — the agent must not be
     /// reachable from the LAN/internet, only over the owner's tailnet or locally.
     /// If no tailnet address exists yet, loopback only (safe default).
+    /// Extra addresses (the mesh VIP, §27) are always added: the mesh VIP is
+    /// the device's own fleet address, like loopback — it never widens LAN
+    /// exposure, and without it the agent API has no listener on the one
+    /// flow the mesh firewall permits. Callers pass the persisted VIP
+    /// (MeshFrameStore) at build time; a VIP assigned mid-lifetime binds
+    /// at the next agent restart (Kestrel binds once).
     /// </summary>
-    public static IReadOnlyList<string> ResolveBindAddresses(AgentConfig cfg)
+    public static IReadOnlyList<string> ResolveBindAddresses(AgentConfig cfg, IEnumerable<string>? extraBindAddresses = null)
     {
-        if (cfg.BindAddresses.Count > 0) return cfg.BindAddresses;
+        if (cfg.BindAddresses.Count > 0)
+        {
+            var configured = new List<string>(cfg.BindAddresses);
+            AddExtras(configured, extraBindAddresses);
+            return configured;
+        }
         var addrs = new List<string> { "127.0.0.1" };
         foreach (var ip in DiscoverTailnetIps())
             if (!addrs.Contains(ip)) addrs.Add(ip);
+        AddExtras(addrs, extraBindAddresses);
         return addrs;
+    }
+
+    private static void AddExtras(List<string> addrs, IEnumerable<string>? extras)
+    {
+        if (extras == null) return;
+        foreach (var extra in extras)
+        {
+            if (string.IsNullOrWhiteSpace(extra)) continue;
+            var trimmed = extra.Trim();
+            if (!IPAddress.TryParse(trimmed, out _)) continue;
+            if (!addrs.Contains(trimmed)) addrs.Add(trimmed);
+        }
     }
 }
 

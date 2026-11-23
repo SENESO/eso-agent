@@ -30,20 +30,40 @@ public sealed class DeviceItem
     /// Pending devices get the Approve action instead; rejected devices get neither.</summary>
     public bool CanConnect => !IsFleet || State == "Approved";
 
+    /// <summary>Live desktop-session phase for THIS row's device, mirrored
+    /// from the session tracker by the shell on every transition (Idle for
+    /// every device but the session's own). Drives the row's action: the
+    /// Connect button is a state display, not a decoration (defect-2).</summary>
+    public DesktopSessionPhase SessionPhase { get; set; } = DesktopSessionPhase.Idle;
+
     /// <summary>Row action labels, read from the string table when the row is
     /// rendered (the shell re-renders rows on a language switch).</summary>
-    public string ConnectLabel => Strings.T("Connect");
+    public string ConnectLabel => SessionPhase switch
+    {
+        DesktopSessionPhase.Connecting => Strings.T("Connecting"),
+        DesktopSessionPhase.Connected => Strings.T("Disconnect"),
+        DesktopSessionPhase.Disconnecting => Strings.T("Disconnecting"),
+        _ => Strings.T("Connect"),
+    };
     public string ApproveLabel => Strings.T("Approve");
+    public string PendingBadgeLabel => Strings.T("PendingBadge");
+    public string HealthWarnBadgeLabel => Strings.T("HealthWarnBadge");
+    public string HealthFailBadgeLabel => Strings.T("HealthFailBadge");
 
-    public string Title => IsFleet ? $"{Name}  ·  {Code}" : $"{Name}  ·  direct";
-    public string StatusLine => Online ? "Online" : "Offline";
+    /// <summary>The row action is live in every phase except mid-disconnect:
+    /// while Connecting it acts as cancel, while Connected as Disconnect.</summary>
+    public bool ConnectActionEnabled => SessionPhase != DesktopSessionPhase.Disconnecting;
+
+    public string Title => IsFleet ? $"{Name}  ·  {Code}" : Name;
+    public string StatusLine => Strings.T(Online ? "Online" : "Offline");
     public string DetailLine
     {
         get
         {
+            // Names and plain facts only — network addresses (the mesh IP
+            // included) are diagnostics, not display (defect-9).
             var parts = new List<string>();
             if (!string.IsNullOrEmpty(Os)) parts.Add(Os);
-            if (VirtualIp != null) parts.Add($"mesh {VirtualIp}");
             if (Groups.Count > 0) parts.Add(string.Join(", ", Groups));
             return string.Join("  ·  ", parts);
         }
@@ -61,11 +81,13 @@ public sealed class DeviceItem
         Groups = d.Groups,
     };
 
-    /// <summary>The direct-mode fallback: the one device the config's host/token/fingerprint describe.</summary>
+    /// <summary>The direct-mode fallback: the one device the config's host/token/fingerprint describe.
+    /// Displayed by its plain name, never by its raw address (defect-9) —
+    /// the address stays in the config and the diagnostics.</summary>
     public static DeviceItem Direct(string host) => new()
     {
         Code = null,
-        Name = host,
+        Name = Strings.T("DirectDevice"),
         Os = "",
         Online = false, // unknown until a status call succeeds; the Status tab tells the truth
     };

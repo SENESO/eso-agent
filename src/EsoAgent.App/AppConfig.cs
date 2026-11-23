@@ -26,17 +26,20 @@ public sealed class AppConfig
         => Environment.GetEnvironmentVariable("ESOAGENT_CLIENT_CONFIG")
            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".esoagent", "client.json");
 
-    /// <summary>Tolerant load for editing: a missing file yields defaults instead of an error.</summary>
+    /// <summary>Tolerant load for editing: a missing file yields defaults
+    /// instead of an error. Backup-aware (defect-8): a torn client.json
+    /// opens as its last-good self; a doubly-corrupt one opens as
+    /// defaults for editing, with its bytes left on disk untouched
+    /// until the user actually saves.</summary>
     public static AppConfig LoadForEdit(string path)
     {
-        if (!File.Exists(path)) return new AppConfig();
-        return JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), EsoJson.Options) ?? new AppConfig();
+        StateFile.TryReadJson<AppConfig>(path, out var cfg);
+        return cfg ?? new AppConfig();
     }
 
     public void Save(string path)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions(EsoJson.Options) { WriteIndented = true });
-        File.WriteAllText(path, json + "\n");
+        StateFile.WriteText(path, json + "\n");
     }
 }

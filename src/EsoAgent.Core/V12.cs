@@ -911,3 +911,15 @@ public sealed class RolloutCreatedResponse
 public sealed class RolloutDeviceStateRequest { public string Code { get; set; } = ""; public string State { get; set; } = ""; public string? Error { get; set; } }
 public sealed class WakeCodeRequest { public string Code { get; set; } = ""; }
 public sealed class ExitNodeRequest { public string? Code { get; set; } }
+
+/// <summary>Chunked update-package upload (v1.3.2, BUILD-REPORT §25 follow-up):
+/// each chunk is its own signed request, so a slow link can take as long as
+/// it needs without the operator signature going stale. The commit re-verifies
+/// the whole-file hash before the package is promoted.</summary>
+public sealed class ChunkedUploadStateDto
+{
+    public string Sha256 { get; set; } = "";
+    public long TotalSize { get; set; }
+    public long Received { get; set; }
+}
+public sealed class ChunkedUploadCommitRequest { public string Sha256 { get; set; } = ""; public long Size { get; set; } }

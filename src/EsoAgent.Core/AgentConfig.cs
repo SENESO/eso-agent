@@ -83,8 +83,19 @@ public sealed class AgentConfig
         var jsonPath = Path.Combine(dir, "esoagent.json");
         if (File.Exists(jsonPath))
         {
-            var loaded = JsonSerializer.Deserialize<AgentConfig>(File.ReadAllText(jsonPath), EsoJson.Options);
+            // Through StateFile (defect-8): a torn esoagent.json recovers
+            // from its last-good backup. A doubly-corrupt file no longer
+            // throws the agent dead at startup either: its bytes are
+            // quarantined (preserved for repair) and the agent boots on
+            // defaults — which include the shipped fleet hub, so the
+            // device still enrolls and shows its code.
+            var status = StateFile.TryReadJson<AgentConfig>(jsonPath, out var loaded);
             if (loaded != null) cfg = loaded;
+            else if (status == StateFileRead.Corrupt)
+            {
+                var quarantined = StateFile.QuarantineCorrupt(jsonPath);
+                System.Diagnostics.Debug.WriteLine($"[esoagent] esoagent.json unreadable — quarantined to {quarantined}; booting on defaults.");
+            }
         }
         cfg.ResolvedDataDir = dir;
         if (string.IsNullOrWhiteSpace(cfg.DataDir)) cfg.DataDir = dir;

@@ -225,7 +225,21 @@ public static class FleetCommandsV12
             case "upload":
             {
                 if (rest.Count < 2 || !File.Exists(rest[1])) return Usage("eso rollout upload <package.zip>");
-                var info = await fleet.UploadUpdatePackageAsync(await File.ReadAllBytesAsync(rest[1]));
+                // Chunked (v1.3.2): the file streams off disk in 256 KiB signed
+                // chunks — no 70 MB in memory, and a slow link can take as long
+                // as it needs. Progress throttled to 5% steps so a 70 MB upload
+                // prints ~20 lines, not ~280.
+                long lastPct = -1;
+                var progress = new Progress<(long Sent, long Total)>(p =>
+                {
+                    var pct = p.Total == 0 ? 100 : p.Sent * 100 / p.Total;
+                    if (pct != lastPct && (pct % 5 == 0 || pct == 100))
+                    {
+                        Console.WriteLine($"  {p.Sent}/{p.Total} bytes ({pct}%)");
+                        lastPct = pct;
+                    }
+                });
+                var info = await fleet.UploadUpdatePackageAsync(rest[1], progress);
                 Console.WriteLine($"Package staged on the fleet server: sha256 {info.GetProperty("sha256").GetString()}, {info.GetProperty("size").GetInt64()} bytes.");
                 Console.WriteLine("Start the rollout with: eso rollout start --device <CODE> | --group <g> | --all");
                 return 0;

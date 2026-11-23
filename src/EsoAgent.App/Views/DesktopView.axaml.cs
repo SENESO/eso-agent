@@ -50,7 +50,7 @@ public sealed partial class DesktopView : UserControl
     private int _targetPort;
 
     private SessionHandle? _client;
-    private bool _connecting;
+    private readonly DesktopSessionTracker _session = new();
     private bool _privacyOn;
     private bool _applyingSettings;               // suppresses reconnect while the UI is being populated
     private List<MonitorInfo> _monitors = new();
@@ -73,13 +73,68 @@ public sealed partial class DesktopView : UserControl
     /// window state and the surrounding chrome (header, device list).</summary>
     public event Action<bool>? FullscreenChanged;
 
+    /// <summary>The session lifecycle, as the one source of truth for
+    /// session state (defect-2): the shell renders device rows, recents
+    /// and its connect affordances from this tracker, which moves only
+    /// on real lifecycle events — attempt start, welcome frame, the
+    /// operator's disconnect, the client's session-ended event.</summary>
+    public DesktopSessionTracker Session => _session;
+
+    /// <summary>Raised after every session phase transition.</summary>
+    public event Action? SessionStateChanged;
+
+    /// <summary>Programmatic disconnect for the shell (a device row's
+    /// Disconnect action) — the same path as the Disconnect button.</summary>
+    public Task DisconnectSessionAsync() => DisconnectCoreAsync();
+
     public DesktopView()
     {
         InitializeComponent();
+        _session.Changed += () =>
+        {
+            ApplySessionUi();
+            SessionStateChanged?.Invoke();
+        };
         _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _statsTimer.Tick += OnStatsTick;
         _statsTimer.Start();
         ApplyLanguage();
+    }
+
+    /// <summary>Every session-chrome state derives from the tracker phase
+    /// here — no scattered IsEnabled writes, no optimism: Connect is
+    /// available only in Idle, Disconnect cancels a Connecting attempt
+    /// and ends a Connected session, and the session-only actions exist
+    /// only while Connected. The idle screen explains itself.</summary>
+    private void ApplySessionUi()
+    {
+        var phase = _session.Phase;
+        var live = phase == DesktopSessionPhase.Connected;
+        ConnectButton.IsEnabled = phase == DesktopSessionPhase.Idle && _cfg != null && _device != null;
+        DisconnectButton.IsEnabled = phase is DesktopSessionPhase.Connecting or DesktopSessionPhase.Connected;
+        PasteButton.IsEnabled = live;
+        CadButton.IsEnabled = live;
+        PrivacyButton.IsEnabled = live;
+        ChatButton.IsEnabled = live;
+        ChatInput.IsEnabled = live;
+        ChatSendButton.IsEnabled = live;
+        NoSessionText.IsVisible = phase == DesktopSessionPhase.Idle;
+        if (!live)
+        {
+            PrivacyButton.Content = Strings.T("PrivacyOff");
+            _privacyOn = false;
+            RecText.IsVisible = false;
+            SetChatOpen(false);
+            _chatUnread = 0;
+            ChatBadge.IsVisible = false;
+            StatsText.Text = "";
+            ScreenImage.Source = null;
+            _jpegBitmap?.Dispose();
+            _jpegBitmap = null;
+            _rawBitmap?.Dispose();
+            _rawBitmap = null;
+            _prevRaw = null;
+        }
     }
 
     public void ApplyLanguage()
@@ -98,7 +153,10 @@ public sealed partial class DesktopView : UserControl
         QualityLabel.Text = Strings.T("Quality");
         MonitorLabel.Text = Strings.T("Monitor");
         CadButton.Content = Strings.T("SendCad");
+        ChatInput.Watermark = Strings.T("ChatWatermark");
+        NoSessionText.Text = Strings.T("DesktopIdleHint");
         PopulateCombos();
+        ApplySessionUi();
     }
 
     private void PopulateCombos()
@@ -135,9 +193,10 @@ public sealed partial class DesktopView : UserControl
             ? device.Ips.FirstOrDefault() ?? device.VirtualIp ?? cfg.Host
             : cfg.Host;
         _targetPort = cfg.Port;
-        StateText.Text = device.IsFleet
-            ? $"Desktop target: {_targetHost}:{_targetPort} direct, fleet relay as fallback"
-            : $"Desktop target: {_targetHost}:{_targetPort}";
+        // No addresses in the UI (defect-9): the target lives in the
+        // diagnostics; the idle screen carries the plain hint instead.
+        StateText.Text = "";
+        ApplySessionUi();
     }
 
     /// <summary>Called by the main window when the selection changes or the window closes.</summary>
@@ -175,6 +234,7 @@ public sealed partial class DesktopView : UserControl
         // the protocol has no mid-session renegotiation).
         if (_applyingSettings || _client == null) return;
         _monitorIndex = Math.Max(0, MonitorBox.SelectedIndex);
+        await DisconnectCoreAsync();
         await ConnectAsync();
     }
 
@@ -195,18 +255,18 @@ public sealed partial class DesktopView : UserControl
 
     private async Task ConnectAsync()
     {
-        if (_cfg == null || _device == null || _connecting) return;
-        _connecting = true;
-        ConnectButton.IsEnabled = false;
-        StateText.Text = "Connecting…";
-        await DisconnectCoreAsync(updateUi: false);
-        var errors = new List<string>();
+        if (_cfg == null || _device == null) return;
+        // The tracker is the reentrancy guard AND the state the whole UI
+        // renders: a second start while a session is in flight is refused.
+        if (!_session.BeginConnect(_device.Code)) return;
+        StateText.Text = Strings.T("Connecting");
+        await DisposeClientAsync();   // a zombie handle from a replaced session; the phase stays Connecting
         try
         {
             await OpenDirectAsync(_targetHost, _targetPort, "");
             return;
         }
-        catch (Exception ex) { errors.Add($"direct {_targetHost}:{_targetPort} — {ex.Message}"); }
+        catch { /* fall through to the next path — failures are reported plainly, never as raw exception text */ }
 
         // A fleet device's recorded address can be stale or unbound (an empty
         // IP list falls back to the mesh VIP, which the agent does not listen
@@ -217,29 +277,27 @@ public sealed partial class DesktopView : UserControl
         {
             try
             {
-                await OpenDirectAsync(_cfg.Host, _cfg.Port,
-                    $" · via {_cfg.Host}:{_cfg.Port} (the device address was unreachable)");
+                await OpenDirectAsync(_cfg.Host, _cfg.Port, $" · {Strings.T("ViaConfiguredAddress")}");
                 return;
             }
-            catch (Exception ex) { errors.Add($"config address — {ex.Message}"); }
+            catch { /* fall through */ }
         }
 
         // Fleet relay: works even when NO direct address is routable — the
         // device verifies the operator's stream signature itself.
         if (_device.IsFleet && !string.IsNullOrEmpty(_device.Code))
         {
-            StateText.Text = "Direct paths failed — trying the fleet relay…";
+            StateText.Text = Strings.T("TryingRelay");
             try
             {
                 await OpenRelayAsync();
                 return;
             }
-            catch (Exception ex) { errors.Add($"fleet relay — {ex.Message}"); }
+            catch { /* fall through */ }
         }
 
-        StateText.Text = "Connect failed: " + string.Join(" · ", errors);
-        ConnectButton.IsEnabled = true;
-        _connecting = false;
+        _session.MarkConnectFailed();
+        StateText.Text = Strings.T("ConnectFailedPlain");
     }
 
     private DesktopHello BuildHello()
@@ -265,8 +323,15 @@ public sealed partial class DesktopView : UserControl
         try { welcome = await client.ConnectAsync(_cfg!, host, port, BuildHello()); }
         catch { await handle.DisposeAsync(); throw; }
         _client = handle;
+        if (!_session.MarkConnected())
+        {
+            // The operator cancelled while this attempt was in flight —
+            // the session must not come up behind their back.
+            _client = null;
+            await handle.DisposeAsync();
+            return;
+        }
         FinishConnect(welcome, note);
-        _connecting = false;
     }
 
     private async Task OpenRelayAsync()
@@ -279,8 +344,13 @@ public sealed partial class DesktopView : UserControl
         try { welcome = await client.ConnectAsync(fleet, _device!.Code ?? "", BuildHello()); }
         catch { await handle.DisposeAsync(); throw; }
         _client = handle;
-        FinishConnect(welcome, " · via fleet relay");
-        _connecting = false;
+        if (!_session.MarkConnected())
+        {
+            _client = null;
+            await handle.DisposeAsync();
+            return;
+        }
+        FinishConnect(welcome, $" · {Strings.T("ViaFleetRelay")}");
     }
 
     private void WireSession(SessionHandle handle)
@@ -304,13 +374,16 @@ public sealed partial class DesktopView : UserControl
         handle.PrivacyReceived += on => Dispatcher.UIThread.Post(() =>
         {
             _privacyOn = on;
-            PrivacyButton.Content = on ? "Privacy: ON" : "Privacy: off";
+            PrivacyButton.Content = Strings.T(on ? "PrivacyOn" : "PrivacyOff");
         });
-        handle.SessionEnded += reason => Dispatcher.UIThread.Post(() =>
+        handle.SessionEnded += reason => Dispatcher.UIThread.Post(async () =>
         {
             if (!ReferenceEquals(_client, handle)) return;   // a stale session must not touch the new one's UI
-            _ = DisconnectCoreAsync();
-            StateText.Text = reason;
+            await DisposeClientAsync();
+            if (!_session.MarkSessionEnded()) _session.MarkDisconnected();
+            // Plain language only: the clients' raw "Session error: …"
+            // form sanitizes to null and the generic line shows instead.
+            StateText.Text = DesktopSessionText.SanitizeEndReason(reason) ?? Strings.T("DesktopSessionEnded");
         });
     }
 
@@ -327,51 +400,42 @@ public sealed partial class DesktopView : UserControl
         _prevRaw = null;
         _stats.Reset();
         _privacyOn = false;
-        PrivacyButton.Content = "Privacy: off";
+        PrivacyButton.Content = Strings.T("PrivacyOff");
         RecText.IsVisible = !string.IsNullOrEmpty(welcome.Recording);
-        StateText.Text = $"Connected · {welcome.Mode} · {welcome.Codec} · {welcome.Width}×{welcome.Height}"
-            + (string.IsNullOrEmpty(welcome.Recording) ? "" : $" · recording to {welcome.Recording}")
+        StateText.Text = $"{Strings.T("ConnectedWord")} · {welcome.Mode} · {welcome.Codec} · {welcome.Width}×{welcome.Height}"
+            + (string.IsNullOrEmpty(welcome.Recording) ? "" : $" · {Strings.T("RecordingWord")}")
             + note;
-        DisconnectButton.IsEnabled = true;
-        PasteButton.IsEnabled = true;
-        CadButton.IsEnabled = true;
-        PrivacyButton.IsEnabled = true;
-        ChatButton.IsEnabled = true;
-        ChatInput.IsEnabled = true;
-        ChatSendButton.IsEnabled = true;
+        // Button states come from ApplySessionUi (the MarkConnected
+        // transition already ran it) — never from scattered writes here.
         ScreenBorder.Focus();
     }
 
-    private async Task DisconnectCoreAsync(bool updateUi = true)
+    /// <summary>Disposes the live handle without moving the phase —
+    /// ConnectAsync clears a replaced session's zombie this way while
+    /// its own attempt keeps the Connecting phase.</summary>
+    private async Task DisposeClientAsync()
     {
         var client = _client;
         _client = null;
         if (client != null) await client.DisposeAsync();
-        if (updateUi)
-        {
-            ConnectButton.IsEnabled = _cfg != null;
-            DisconnectButton.IsEnabled = false;
-            PasteButton.IsEnabled = false;
-            CadButton.IsEnabled = false;
-            PrivacyButton.IsEnabled = false;
-            PrivacyButton.Content = "Privacy: off";
-            _privacyOn = false;
-            RecText.IsVisible = false;
-            ChatButton.IsEnabled = false;
-            ChatInput.IsEnabled = false;
-            ChatSendButton.IsEnabled = false;
-            SetChatOpen(false);
-            _chatUnread = 0;
-            ChatBadge.IsVisible = false;
-            StatsText.Text = "";
-        }
+    }
+
+    private async Task DisconnectCoreAsync()
+    {
+        _session.BeginDisconnect();
+        await DisposeClientAsync();
+        _session.MarkDisconnected();
     }
 
     // ---------- session chrome: fullscreen, stats, CAD, chat ----------
 
     private void OnFullscreenClick(object? sender, RoutedEventArgs e) => SetFullscreen(!_fullscreen);
 
-    private void ToggleFullscreen() => SetFullscreen(!_fullscreen);
+    /// <summary>The fullscreen toggle, also driven by the shell's
+    /// window-level F11 (which works whatever control has focus while
+    /// the Desktop tab is active — the border-local handler alone made
+    /// F11 depend on where the click focus happened to be).</summary>
+    public void ToggleFullscreen() => SetFullscreen(!_fullscreen);
 
     private void SetFullscreen(bool on)
     {
@@ -635,12 +699,14 @@ public sealed partial class DesktopView : UserControl
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         // Local chrome keys first: F11 is the fullscreen toggle (the plan's
-        // session-bar convention), Esc closes the chat slide-over, and in
-        // View mode Esc also leaves fullscreen. In Control mode Esc belongs
-        // to the remote machine and is forwarded like any other key.
+        // session-bar convention), Esc closes the chat slide-over, and Esc
+        // ALWAYS leaves fullscreen (owner order, 2026-11-22) — in Control
+        // mode Esc therefore no longer reaches the remote machine while
+        // fullscreen; the session bar's Exit fullscreen button and F11
+        // are the same exits.
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
         if (e.Key == Key.Escape && _chatOpen) { SetChatOpen(false); e.Handled = true; return; }
-        if (e.Key == Key.Escape && _fullscreen && !CanControl) { SetFullscreen(false); e.Handled = true; return; }
+        if (e.Key == Key.Escape && _fullscreen) { SetFullscreen(false); e.Handled = true; return; }
         if (!CanControl) return;
         var mods = e.KeyModifiers;
         var ctrl = mods.HasFlag(KeyModifiers.Control);

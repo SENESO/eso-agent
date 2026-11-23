@@ -46,7 +46,7 @@ public static class FleetMesh
             .Where(d => !string.IsNullOrWhiteSpace(d.VirtualIp))
             .Select(d => new AclCompiler.DeviceView(d.Code, d.VirtualIp!, d.Groups))
             .ToList();
-        var plans = AclCompiler.Compile(views, state.Registry.AclRules(), AgentPort);
+        var plans = AclCompiler.Compile(views, state.Registry.AclRules(), AgentPort, P2pDefaults.ListenPort);
         return new FleetMeshFrame
         {
             YourVirtualIp = self.VirtualIp ?? "",

@@ -11,6 +11,11 @@ namespace EsoAgent.Core;
 /// </summary>
 public sealed class FileTransferService
 {
+    /// <summary>Chunk size for the chunked update-package upload (v1.3.2):
+    /// 256 KiB takes ~3.4 s at the slowest measured link (~76 KB/s), so each
+    /// chunk's operator signature stays far inside the 120 s skew window.</summary>
+    public const int PackageChunkSize = 256 * 1024;
+
     public static string PartPath(string targetPath) => targetPath + ".esopart";
 
     public long BeginUpload(string targetPath)

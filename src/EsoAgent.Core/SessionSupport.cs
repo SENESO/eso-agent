@@ -124,3 +124,125 @@ public sealed class ShellSessionBuffer
         LastSeq = 0;
     }
 }
+
+/// <summary>The four phases a desktop session moves through. UI affordances
+/// (the device-row Connect button, the session bar, the recents) render
+/// from this one state — never from timers or optimism (owner verdict
+/// 2026-11-22: "the Connect button is decorative; its state never changes
+/// while the connection works").</summary>
+public enum DesktopSessionPhase
+{
+    Idle,
+    Connecting,
+    Connected,
+    Disconnecting,
+}
+
+/// <summary>
+/// The desktop session lifecycle as a small guarded state machine, kept in
+/// Core so the transitions are unit-tested. The view drives it from the
+/// REAL lifecycle points only: connect start (the attempt begins), the
+/// welcome frame (connected), the operator's disconnect or the client's
+/// session-ended event (back to idle). Invalid transitions are no-ops, so
+/// a stale session's late event can never resurrect or kill the state of
+/// the session that replaced it.
+/// </summary>
+public sealed class DesktopSessionTracker
+{
+    public DesktopSessionPhase Phase { get; private set; } = DesktopSessionPhase.Idle;
+
+    /// <summary>Fleet code of the device the active (or last attempted)
+    /// session targets; null in Idle and for the direct device.</summary>
+    public string? DeviceCode { get; private set; }
+
+    /// <summary>Raised after every accepted transition.</summary>
+    public event Action? Changed;
+
+    public bool IsActive => Phase != DesktopSessionPhase.Idle;
+
+    /// <summary>True while a session in <paramref name="phase"/> targets
+    /// this device code (case-insensitive; codes are identity here).</summary>
+    public bool IsActiveFor(string? deviceCode, DesktopSessionPhase? phase = null)
+        => IsActive
+           && deviceCode != null
+           && string.Equals(DeviceCode, deviceCode, StringComparison.OrdinalIgnoreCase)
+           && (phase == null || Phase == phase.Value);
+
+    /// <summary>Idle → Connecting. Refused (false) while another session is
+    /// in flight — the caller must end it first.</summary>
+    public bool BeginConnect(string? deviceCode)
+    {
+        if (Phase != DesktopSessionPhase.Idle) return false;
+        DeviceCode = deviceCode;
+        Transition(DesktopSessionPhase.Connecting);
+        return true;
+    }
+
+    /// <summary>Connecting → Connected (the welcome frame arrived).</summary>
+    public bool MarkConnected()
+    {
+        if (Phase != DesktopSessionPhase.Connecting) return false;
+        Transition(DesktopSessionPhase.Connected);
+        return true;
+    }
+
+    /// <summary>Connecting → Idle (every connection path failed).</summary>
+    public bool MarkConnectFailed()
+    {
+        if (Phase != DesktopSessionPhase.Connecting) return false;
+        DeviceCode = null;
+        Transition(DesktopSessionPhase.Idle);
+        return true;
+    }
+
+    /// <summary>Connecting/Connected → Disconnecting (the operator asked
+    /// to end it, or the view is detaching from the device).</summary>
+    public bool BeginDisconnect()
+    {
+        if (Phase is not (DesktopSessionPhase.Connecting or DesktopSessionPhase.Connected)) return false;
+        Transition(DesktopSessionPhase.Disconnecting);
+        return true;
+    }
+
+    /// <summary>Any phase → Idle (teardown finished). Safe to call when
+    /// already idle; the device code is cleared either way.</summary>
+    public void MarkDisconnected()
+    {
+        DeviceCode = null;
+        if (Phase != DesktopSessionPhase.Idle) Transition(DesktopSessionPhase.Idle);
+    }
+
+    /// <summary>Connected → Idle (the session ended on its own: the agent
+    /// closed it or the transport dropped). A no-op from any other phase,
+    /// so a replaced session's late end event cannot idle the new one.</summary>
+    public bool MarkSessionEnded()
+    {
+        if (Phase != DesktopSessionPhase.Connected) return false;
+        DeviceCode = null;
+        Transition(DesktopSessionPhase.Idle);
+        return true;
+    }
+
+    private void Transition(DesktopSessionPhase next)
+    {
+        Phase = next;
+        Changed?.Invoke();
+    }
+}
+
+/// <summary>Text hygiene for session-end reasons. The desktop clients end
+/// a session with a plain reason ("Session closed by the agent.", the
+/// agent's own close reason, "Disconnected.") — or, on a transport error,
+/// with "Session error: " + a raw exception message. The raw form must
+/// never reach the UI (owner order: plain-language status lines only), so
+/// it sanitizes to null and the caller shows its generic line instead.</summary>
+public static class DesktopSessionText
+{
+    public static string? SanitizeEndReason(string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return null;
+        var trimmed = reason.Trim();
+        if (trimmed.StartsWith("Session error:", StringComparison.OrdinalIgnoreCase)) return null;
+        return trimmed;
+    }
+}

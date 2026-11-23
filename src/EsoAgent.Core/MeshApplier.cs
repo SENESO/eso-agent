@@ -52,13 +52,20 @@ public sealed class WgIdentity
 /// an unchanged fingerprint. The self-healing parts still run every
 /// frame: relay shim Sync (restarts dead loops), the hosts merge
 /// (content-gated), and the engine's status refresh + dead-receiver
-/// recovery.
+/// recovery. The §27 plumbing verify is in that same class: the
+/// fingerprint records what was last APPLIED, not what the tunnel
+/// currently HOLDS — the interface address and peer routes are verified
+/// and repaired on every frame, changed or not, because a hibernation
+/// can strip them while the fingerprint still says "unchanged".
 /// </summary>
 public sealed class MeshApplier
 {
     private readonly AgentState _state;
     private readonly RelayShimSet _shims = new();
     private MeshEngineSupervisor? _engine;
+    /// <summary>Test seam: overrides the live interface table the §27
+    /// plumbing verify reads (production: the OS interface table).</summary>
+    internal Func<IReadOnlyList<(string InterfaceName, string Address)>>? InterfaceLister { get; set; }
     /// <summary>Fingerprint of the last frame whose platform apply
     /// converged (see <see cref="ComputeFingerprint"/>); null until the
     /// first converged apply, so a fresh agent always applies in full —
@@ -113,7 +120,18 @@ public sealed class MeshApplier
         await File.WriteAllTextAsync(
             Path.Combine(config.DataDir, "mesh.json"),
             JsonSerializer.Serialize(frame, EsoJson.Options), ct);
+        var previousVip = _state.MeshVirtualIp;
         _state.MeshVirtualIp = frame.YourVirtualIp;
+        if (!string.IsNullOrWhiteSpace(frame.YourVirtualIp)
+            && !string.Equals(previousVip, frame.YourVirtualIp, StringComparison.OrdinalIgnoreCase))
+        {
+            // Kestrel binds once at host build (§27): a VIP assigned or
+            // changed mid-lifetime binds at the next agent restart; the
+            // persisted mesh.json carries it there.
+            audit.Write("mesh", previousVip == null
+                ? $"mesh VIP {frame.YourVirtualIp} assigned — the agent API binds it after the next agent restart"
+                : $"mesh VIP changed {previousVip} → {frame.YourVirtualIp} — the agent API binds the new address after the next agent restart", "ok");
+        }
 
         if (!config.Mesh.Enabled)
         {
@@ -190,6 +208,19 @@ public sealed class MeshApplier
                 catch (Exception ex) { notes.Add($"tunnel: {ex.Message}"); }
             }
         }
+
+        // 1a) Tunnel plumbing verify + repair (§27): the §24 fingerprint
+        // gate must not skip STATE verification. If the interface lost
+        // its address or a peer route (the box across a hibernation),
+        // every later resync would otherwise skip the repair forever.
+        // Cheap and idempotent; runs on every frame, changed or not,
+        // and never touches the fingerprint gate.
+        try
+        {
+            var plumbing = await MeshPlumbing.VerifyAndRepairAsync(model, _state.Platform.ProcessRunner, InterfaceLister, ct: ct);
+            notes.Add(plumbing.Note);
+        }
+        catch (Exception ex) { notes.Add($"verify: {ex.Message}"); }
 
         // 1b) Exit-node duty (v1.2): when THIS device is the designated exit
         // node, enable forwarding + NAT so peers' default-route traffic can

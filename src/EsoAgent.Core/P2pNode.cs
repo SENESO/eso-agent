@@ -224,14 +224,13 @@ public sealed class P2pNode : IAsyncDisposable
     private void LoadPeerCache()
     {
         var file = _opts.PeerCacheFile;
-        if (file == null || !File.Exists(file)) return;
-        try
-        {
-            var peers = JsonSerializer.Deserialize<List<P2pPeerInfo>>(File.ReadAllText(file));
-            if (peers == null) return;
-            foreach (var p in peers) if (IsSelfConsistent(p)) Table.Add(p);
-        }
-        catch { /* a corrupt cache is a cold start, not a crash */ }
+        if (file == null) return;
+        // Backup-aware (defect-8): a torn cache recovers the last-good
+        // peer set from its backup instead of cold-starting empty; a
+        // doubly-corrupt cache is still just a cold start, never a crash.
+        var status = StateFile.TryReadJson<List<P2pPeerInfo>>(file, out var peers, new JsonSerializerOptions());
+        if (peers == null) return;
+        foreach (var p in peers) if (IsSelfConsistent(p)) Table.Add(p);
     }
 
     private void SavePeerCache(bool force)
@@ -244,10 +243,7 @@ public sealed class P2pNode : IAsyncDisposable
             _lastCacheSave = DateTime.UtcNow;
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
-                var tmp = file + ".tmp";
-                File.WriteAllText(tmp, JsonSerializer.Serialize(Table.All()));
-                File.Move(tmp, file, overwrite: true);
+                StateFile.WriteText(file, JsonSerializer.Serialize(Table.All()));
             }
             catch { }
         }

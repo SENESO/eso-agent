@@ -45,10 +45,10 @@ public sealed partial class StatusView : UserControl
                 ApplyUpdateButton.Content = $"⬆ Apply update v{status.UpdateAvailable}";
             StateText.Text = $"Updated {DateTime.Now:T}";
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            BodyText.Text = $"Status failed: {ex.Message}";
-            StateText.Text = "Failed";
+            BodyText.Text = Strings.T("StatusLoadFailed");
+            StateText.Text = Strings.T("FailedWord");
         }
         finally { RefreshButton.IsEnabled = true; }
     }
@@ -65,7 +65,7 @@ public sealed partial class StatusView : UserControl
             StateText.Text = reply.Ok ? "Update staged — the device restarts into the new version"
                                       : $"Update failed: {reply.Error ?? reply.Text}";
         }
-        catch (Exception ex) { StateText.Text = $"Update failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("ActionFailedPlain"); }
         finally { ApplyUpdateButton.IsEnabled = true; }
     }
 
@@ -88,10 +88,10 @@ public sealed partial class StatusView : UserControl
             BodyText.Text = FormatDiagnose(reply.Json<DiagnoseResponse>());
             StateText.Text = $"Diagnosed {DateTime.Now:T}";
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            BodyText.Text = $"Diagnose failed: {ex.Message}";
-            StateText.Text = "Failed";
+            BodyText.Text = Strings.T("DiagnoseFailedPlain");
+            StateText.Text = Strings.T("FailedWord");
         }
         finally { DiagnoseButton.IsEnabled = true; }
     }

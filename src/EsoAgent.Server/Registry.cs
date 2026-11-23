@@ -92,8 +92,13 @@ public sealed class FleetRegistry
                 var mtime = File.GetLastWriteTimeUtc(_path);
                 if (force || mtime != _loadedMtime)
                 {
-                    try { _data = JsonSerializer.Deserialize<RegistryFile>(File.ReadAllText(_path), EsoJson.Options) ?? new(); }
-                    catch { _data = new(); }
+                    // Backup-aware (defect-8): a torn registry recovers
+                    // from its last-good backup; a doubly-corrupt file
+                    // keeps the in-memory fleet and its bytes are
+                    // quarantined — never a silent reset to empty.
+                    var status = StateFile.TryReadJson<RegistryFile>(_path, out var loadedData);
+                    if (loadedData != null) _data = loadedData;
+                    else if (status == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(_path);
                     _loadedMtime = mtime;
                 }
             }
@@ -102,8 +107,9 @@ public sealed class FleetRegistry
                 var mtime = File.GetLastWriteTimeUtc(_settingsPath);
                 if (force || mtime != _loadedSettingsMtime)
                 {
-                    try { _settings = JsonSerializer.Deserialize<ServerSettings>(File.ReadAllText(_settingsPath), EsoJson.Options) ?? new(); }
-                    catch { _settings = new(); }
+                    var settingsStatus = StateFile.TryReadJson<ServerSettings>(_settingsPath, out var loadedSettings);
+                    if (loadedSettings != null) _settings = loadedSettings;
+                    else if (settingsStatus == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(_settingsPath);
                     _loadedSettingsMtime = mtime;
                 }
             }
@@ -112,8 +118,9 @@ public sealed class FleetRegistry
                 var mtime = File.GetLastWriteTimeUtc(_meshPath);
                 if (force || mtime != _loadedMeshMtime)
                 {
-                    try { _mesh = JsonSerializer.Deserialize<MeshFile>(File.ReadAllText(_meshPath), EsoJson.Options) ?? new(); }
-                    catch { _mesh = new(); }
+                    var meshStatus = StateFile.TryReadJson<MeshFile>(_meshPath, out var loadedMesh);
+                    if (loadedMesh != null) _mesh = loadedMesh;
+                    else if (meshStatus == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(_meshPath);
                     _loadedMeshMtime = mtime;
                 }
             }
@@ -122,25 +129,19 @@ public sealed class FleetRegistry
 
     private void SaveMesh()
     {
-        var tmp = _meshPath + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(_mesh, EsoJson.Options));
-        File.Move(tmp, _meshPath, overwrite: true);
+        StateFile.WriteText(_meshPath, JsonSerializer.Serialize(_mesh, EsoJson.Options));
         _loadedMeshMtime = File.GetLastWriteTimeUtc(_meshPath);
     }
 
     private void Save()
     {
-        var tmp = _path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(_data, EsoJson.Options));
-        File.Move(tmp, _path, overwrite: true);
+        StateFile.WriteText(_path, JsonSerializer.Serialize(_data, EsoJson.Options));
         _loadedMtime = File.GetLastWriteTimeUtc(_path);
     }
 
     private void SaveSettings()
     {
-        var tmp = _settingsPath + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(_settings, EsoJson.Options));
-        File.Move(tmp, _settingsPath, overwrite: true);
+        StateFile.WriteText(_settingsPath, JsonSerializer.Serialize(_settings, EsoJson.Options));
         _loadedSettingsMtime = File.GetLastWriteTimeUtc(_settingsPath);
     }
 

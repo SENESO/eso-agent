@@ -15,19 +15,15 @@ public sealed class ScriptStore
     public ScriptStore(string dataDir)
     {
         _path = Path.Combine(dataDir, "scripts.json");
-        try
-        {
-            if (File.Exists(_path))
-                _scripts = JsonSerializer.Deserialize<ScriptFile>(File.ReadAllText(_path), EsoJson.Options)?.Scripts ?? new();
-        }
-        catch { _scripts = new(); }
+        // Backup-aware (defect-8), same policy as the other stores.
+        var status = StateFile.TryReadJson<ScriptFile>(_path, out var file);
+        if (file != null) _scripts = file.Scripts ?? new();
+        else if (status == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(_path);
     }
 
     private void Save()
     {
-        var tmp = _path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(new ScriptFile { Scripts = _scripts }, EsoJson.Options));
-        File.Move(tmp, _path, overwrite: true);
+        StateFile.WriteText(_path, JsonSerializer.Serialize(new ScriptFile { Scripts = _scripts }, EsoJson.Options));
     }
 
     public IReadOnlyList<ScriptDto> List()
@@ -88,6 +84,8 @@ public sealed class ScriptStore
 public sealed class UpdatePackageStore
 {
     private readonly string _dir;
+    private readonly object _gate = new();
+    private readonly FileTransferService _files = new();
 
     public sealed class PackageInfo
     {
@@ -97,10 +95,23 @@ public sealed class UpdatePackageStore
         public string UploadedBy { get; set; } = "";
     }
 
+    /// <summary>In-progress chunked upload, persisted in package.upload.json next to
+    /// the part file. The sidecar binds the part to ONE package hash; a part with
+    /// no sidecar is orphaned garbage from a crashed write and is discarded.</summary>
+    public sealed class ChunkedUploadState
+    {
+        public string Sha256 { get; set; } = "";
+        public long TotalSize { get; set; }
+        public long Received { get; set; }
+        public DateTimeOffset StartedAt { get; set; }
+    }
+
     public UpdatePackageStore(string dataDir) => _dir = Path.Combine(dataDir, "updates");
 
     public string PackagePath => Path.Combine(_dir, "package.zip");
     private string InfoPath => Path.Combine(_dir, "package.json");
+    private string UploadSidecarPath => Path.Combine(_dir, "package.upload.json");
+    private string PartPath => FileTransferService.PartPath(PackagePath);
 
     public PackageInfo? Current
     {
@@ -131,8 +142,125 @@ public sealed class UpdatePackageStore
             UploadedAt = DateTimeOffset.UtcNow,
             UploadedBy = uploadedBy,
         };
-        File.WriteAllText(InfoPath, JsonSerializer.Serialize(info, EsoJson.Options));
+        StateFile.WriteText(InfoPath, JsonSerializer.Serialize(info, EsoJson.Options));
         return info;
+    }
+
+    // ----- chunked upload (v1.3.2, BUILD-REPORT §25 follow-up) -----
+    // The single-shot PUT signs ONCE and then uploads for ~15 min on a slow
+    // link, so the operator signature is stale (120 s skew) by verification
+    // time. Chunked upload signs EACH chunk at send time (fresh timestamp,
+    // small body), so a slow link can take as long as it needs; the commit
+    // re-verifies the whole-file hash before promoting. Every failure here
+    // is fail-closed: a torn interleaving can only ever fail the commit,
+    // never promote wrong bytes.
+
+    private ChunkedUploadState? ReadSidecar()
+    {
+        try
+        {
+            return File.Exists(UploadSidecarPath)
+                ? JsonSerializer.Deserialize<ChunkedUploadState>(File.ReadAllText(UploadSidecarPath), EsoJson.Options)
+                : null;
+        }
+        catch { return null; }
+    }
+
+    private void WriteSidecar(ChunkedUploadState state)
+        => StateFile.WriteText(UploadSidecarPath, JsonSerializer.Serialize(state, EsoJson.Options));
+
+    private void DeleteSidecar()
+    {
+        try { if (File.Exists(UploadSidecarPath)) File.Delete(UploadSidecarPath); } catch { }
+    }
+
+    /// <summary>Current in-progress chunked upload, or null. Received is the
+    /// live part-file length, so it can never disagree with the bytes on disk.</summary>
+    public ChunkedUploadState? GetChunkedState()
+    {
+        lock (_gate)
+        {
+            var sidecar = ReadSidecar();
+            if (sidecar == null) return null;
+            sidecar.Received = File.Exists(PartPath) ? new FileInfo(PartPath).Length : 0;
+            return sidecar;
+        }
+    }
+
+    /// <summary>Appends one chunk. Returns the new received length. Throws
+    /// ChunkOffsetException on an offset mismatch (resume from ExpectedOffset)
+    /// and InvalidDataException when another package's upload is in progress.</summary>
+    public long AppendChunk(byte[] chunk, long offset, string sha256, long totalSize)
+    {
+        if (chunk.Length == 0) throw new InvalidDataException("Empty chunk.");
+        if (chunk.Length > 32 * 1024 * 1024) throw new InvalidDataException("Chunk too large (32 MB cap).");
+        if (string.IsNullOrWhiteSpace(sha256) || totalSize <= 0) throw new InvalidDataException("Chunk needs a package sha256 and a positive total size.");
+        lock (_gate)
+        {
+            Directory.CreateDirectory(_dir);
+            var sidecar = ReadSidecar();
+            if (sidecar != null && !string.Equals(sidecar.Sha256, sha256.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"A chunked upload for another package (sha256 {sidecar.Sha256[..12]}…) is in progress; commit or abort it first.");
+            if (sidecar != null && sidecar.TotalSize != totalSize)
+                throw new InvalidDataException($"Total size changed mid-upload ({sidecar.TotalSize} -> {totalSize}); abort and restart.");
+            if (sidecar == null)
+            {
+                // A part with no sidecar is orphaned garbage: it cannot belong
+                // to any known package, so it is discarded, not resumed.
+                if (File.Exists(PartPath)) File.Delete(PartPath);
+                sidecar = new ChunkedUploadState { Sha256 = sha256.Trim().ToLowerInvariant(), TotalSize = totalSize, StartedAt = DateTimeOffset.UtcNow };
+                WriteSidecar(sidecar);
+            }
+            return _files.AppendChunk(PackagePath, offset, chunk);
+        }
+    }
+
+    /// <summary>Verifies the assembled part (length + SHA-256) and promotes it
+    /// to the package store. On ANY mismatch the part is discarded and the
+    /// error is thrown — nothing is ever promoted unverified.</summary>
+    public PackageInfo CommitChunked(string sha256, long totalSize, string uploadedBy)
+    {
+        lock (_gate)
+        {
+            var sidecar = ReadSidecar();
+            if (sidecar == null || !string.Equals(sidecar.Sha256, sha256.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("No chunked upload in progress for this package hash.");
+            if (sidecar.TotalSize != totalSize)
+                throw new InvalidDataException($"Total size changed mid-upload ({sidecar.TotalSize} -> {totalSize}); abort and restart.");
+            if (!File.Exists(PartPath))
+                throw new FileNotFoundException("No partial upload exists for this package.", PartPath);
+            var received = new FileInfo(PartPath).Length;
+            if (received != totalSize)
+                throw new InvalidDataException($"Incomplete upload: received {received} of {totalSize} bytes.");
+            var actual = FileTransferService.HashFile(PartPath);
+            if (!string.Equals(actual, sha256.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(PartPath);
+                DeleteSidecar();
+                throw new InvalidDataException($"SHA-256 mismatch: expected {sha256}, got {actual}. Partial file discarded.");
+            }
+            File.Move(PartPath, PackagePath, overwrite: true);
+            var info = new PackageInfo
+            {
+                Sha256 = actual,
+                Size = new FileInfo(PackagePath).Length,
+                UploadedAt = DateTimeOffset.UtcNow,
+                UploadedBy = uploadedBy,
+            };
+            StateFile.WriteText(InfoPath, JsonSerializer.Serialize(info, EsoJson.Options));
+            DeleteSidecar();
+            return info;
+        }
+    }
+
+    /// <summary>Discards an in-progress chunked upload (part + sidecar).</summary>
+    public void AbortChunked()
+    {
+        lock (_gate)
+        {
+            try { if (File.Exists(PartPath)) File.Delete(PartPath); } catch { }
+            DeleteSidecar();
+        }
     }
 }
 
@@ -156,19 +284,15 @@ public sealed class RolloutStore
     public RolloutStore(string dataDir)
     {
         _path = Path.Combine(dataDir, "rollouts.json");
-        try
-        {
-            if (File.Exists(_path))
-                _rollouts = JsonSerializer.Deserialize<RolloutFile>(File.ReadAllText(_path), EsoJson.Options)?.Rollouts ?? new();
-        }
-        catch { _rollouts = new(); }
+        // Backup-aware (defect-8), same policy as the other stores.
+        var status = StateFile.TryReadJson<RolloutFile>(_path, out var file);
+        if (file != null) _rollouts = file.Rollouts ?? new();
+        else if (status == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(_path);
     }
 
     private void Save()
     {
-        var tmp = _path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(new RolloutFile { Rollouts = _rollouts }, EsoJson.Options));
-        File.Move(tmp, _path, overwrite: true);
+        StateFile.WriteText(_path, JsonSerializer.Serialize(new RolloutFile { Rollouts = _rollouts }, EsoJson.Options));
     }
 
     public RolloutRecord Create(string packageSha256, string createdBy, IEnumerable<(string Code, string Version)> targets)
@@ -248,12 +372,9 @@ public sealed class HealthCache
     public HealthCache(string dataDir)
     {
         _path = Path.Combine(dataDir, "health.json");
-        try
-        {
-            if (File.Exists(_path))
-                _byCode = JsonSerializer.Deserialize<HealthFile>(File.ReadAllText(_path), EsoJson.Options)?.Devices ?? new();
-        }
-        catch { _byCode = new(); }
+        var status = StateFile.TryReadJson<HealthFile>(_path, out var file);
+        if (file != null) _byCode = file.Devices ?? new();
+        else if (status == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(_path);
     }
 
     public DeviceHealthDto? Get(string code)
@@ -268,9 +389,7 @@ public sealed class HealthCache
             _byCode[dto.Code] = dto;
             try
             {
-                var tmp = _path + ".tmp";
-                File.WriteAllText(tmp, JsonSerializer.Serialize(new HealthFile { Devices = _byCode }, EsoJson.Options));
-                File.Move(tmp, _path, overwrite: true);
+                StateFile.WriteText(_path, JsonSerializer.Serialize(new HealthFile { Devices = _byCode }, EsoJson.Options));
             }
             catch { }
         }

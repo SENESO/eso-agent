@@ -50,25 +50,23 @@ public sealed class ScheduleService : BackgroundService
 
     private void LoadState()
     {
-        try
-        {
-            if (File.Exists(StatePath))
-            {
-                var file = JsonSerializer.Deserialize<StateFile>(File.ReadAllText(StatePath), EsoJson.Options);
-                if (file != null)
-                    foreach (var (name, rt) in file.Schedules) _runtime[name] = rt;
-            }
-        }
-        catch { }
+        // Through the shared StateFile helper (defect-8; fully qualified
+        // — this class has its own nested StateFile DTO): a torn state
+        // file recovers from its last-good backup; a doubly-corrupt one
+        // is quarantined (bytes preserved) instead of silently reset.
+        var status = EsoAgent.Core.StateFile.TryReadJson<StateFile>(StatePath, out var file);
+        if (file != null)
+            foreach (var (name, rt) in file.Schedules) _runtime[name] = rt;
+        else if (status == StateFileRead.Corrupt)
+            EsoAgent.Core.StateFile.QuarantineCorrupt(StatePath);
     }
 
     private void SaveState()
     {
         try
         {
-            var tmp = StatePath + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(new StateFile { Schedules = _runtime }, EsoJson.Options));
-            File.Move(tmp, StatePath, overwrite: true);
+            EsoAgent.Core.StateFile.WriteText(StatePath,
+                JsonSerializer.Serialize(new StateFile { Schedules = _runtime }, EsoJson.Options));
         }
         catch { }
     }

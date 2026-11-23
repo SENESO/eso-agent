@@ -599,9 +599,7 @@ public static class Dashboard
         var path = Path.Combine(state.Config.ResolvedDataDir, "esoagent.json");
         var json = System.Text.Json.JsonSerializer.Serialize(state.Config,
             new System.Text.Json.JsonSerializerOptions(EsoJson.Options) { WriteIndented = true });
-        var tmp = path + ".tmp";
-        File.WriteAllText(tmp, json + "\n");
-        File.Move(tmp, path, overwrite: true);
+        StateFile.WriteText(path, json + "\n");
     }
 
     private static string LoginPageWithError(string html, string error)

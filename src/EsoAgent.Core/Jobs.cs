@@ -82,21 +82,16 @@ public sealed class JobService
     private void SaveRecord(JobRecord record)
     {
         Directory.CreateDirectory(JobDir(record.Id));
-        var tmp = RecordPath(record.Id) + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(record, EsoJson.Options));
-        File.Move(tmp, RecordPath(record.Id), overwrite: true);
+        StateFile.WriteText(RecordPath(record.Id), JsonSerializer.Serialize(record, EsoJson.Options));
     }
 
     private JobRecord? LoadRecord(string id)
     {
-        try
-        {
-            var path = RecordPath(id);
-            return File.Exists(path)
-                ? JsonSerializer.Deserialize<JobRecord>(File.ReadAllText(path), EsoJson.Options)
-                : null;
-        }
-        catch { return null; }
+        // Backup-aware (defect-8): a torn job record recovers from its
+        // last-good backup; only a genuinely absent or doubly-corrupt
+        // record reads as null, and corrupt bytes are left untouched.
+        var status = StateFile.TryReadJson<JobRecord>(RecordPath(id), out var record);
+        return status is StateFileRead.Ok or StateFileRead.RecoveredFromBackup ? record : null;
     }
 
     /// <summary>Closes out every job left "running" by a previous agent lifetime.

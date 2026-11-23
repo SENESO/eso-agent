@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Threading;
 using EsoAgent.App.Views;
 using EsoAgent.Client;
 using EsoAgent.Core;
@@ -87,19 +88,47 @@ public sealed partial class MainWindow : Window
     private bool _buildingGroups;
     private bool _wizardAutoShown;
 
+    // ----- App correctness lane (2026-11-22) -----
+    // This device as the fleet itself reported it on the last sync (before
+    // self-exclusion): the identity card's live source, and the fallback
+    // self identity when no console link exists.
+    private string? _fleetSelfCode;
+    private string? _fleetSelfName;
+    private bool _fleetSelfOnline;
+    // The automatic fleet connection (defect-6): a ReconnectLoop drives
+    // syncs — immediately on launch, every 30 s while up (live states,
+    // no manual refresh), and with capped backoff while down.
+    private ReconnectLoop? _fleetLoop;
+    private CancellationTokenSource? _fleetLoopCts;
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
+    private string _lastSummary = "";
+
+    /// <summary>This machine's fleet code: the local agent's own statement
+    /// (console link) first, the fleet's row for this device second.
+    /// Null = self unknown, and nothing is excluded (defect-1).</summary>
+    private string? SelfCode => _localLink?.DeviceCode ?? _fleetSelfCode;
+
     public MainWindow()
     {
         InitializeComponent();
+        // The title is product + version only — never an address, never
+        // a device name (defect-9).
+        Title = $"EsoAgent v{ProductInfo.Version}";
         VersionText.Text = "v" + ProductInfo.Version;
         LoadLanguage();
             LoadTrayHint();
         LoadHomeState();
+        // Defect-7: the local agent's link is read BEFORE the first
+        // render and before any network call, so the identity card
+        // shows this device's real code from the first frame — a fleet
+        // outage later can never blank it.
+        _localLink = ConsoleLink.TryRead(ConsoleLink.PathForDataDir(AgentConfig.DefaultDataDir()));
         ApplyLanguage();
         UpdateGroupFilter();
         RenderRecents();
         Opened += async (_, _) =>
         {
-            ReloadConfig();
+            ReloadConfig();   // starts the fleet loop (defect-6): the first sync is immediate
             if (_cfg == null && _localLink == null && !_wizardAutoShown)
             {
                 // First run: the pairing wizard is the front door now — the
@@ -107,9 +136,13 @@ public sealed partial class MainWindow : Window
                 _wizardAutoShown = true;
                 await OpenWizardAsync();
             }
-            await RefreshDevicesAsync();
         };
-        Closed += (_, _) => { DesktopTab.Detach(); TerminalTab.Detach(); };
+        Closed += (_, _) =>
+        {
+            _fleetLoopCts?.Cancel();
+            DesktopTab.Detach();
+            TerminalTab.Detach();
+        };
         // Phase 3 session fullscreen: the Desktop view raises it, the shell
         // owns the window state and hides its own chrome (header, home
         // column, status bar) so the session gets the whole window.
@@ -118,7 +151,21 @@ public sealed partial class MainWindow : Window
             WindowState = fs ? WindowState.FullScreen : WindowState.Normal;
             HeaderBar.IsVisible = !fs;
             HomePanel.IsVisible = !fs;
-            StatusBarText.IsVisible = !fs;
+            StatusBar.IsVisible = !fs;
+        };
+        // Session state drives the device rows and recents (defect-2).
+        DesktopTab.SessionStateChanged += SyncRowSessionStates;
+        // F11 toggles fullscreen whenever the Desktop tab is active,
+        // whatever control has focus (the view's own handler covers the
+        // focused-screen case and marks the key handled, so the two
+        // never double-toggle).
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.F11 && MainTabs.SelectedItem == DesktopTabItem)
+            {
+                DesktopTab.ToggleFullscreen();
+                e.Handled = true;
+            }
         };
     }
 
@@ -150,23 +197,11 @@ public sealed partial class MainWindow : Window
     private void SaveLanguage() => UpdateSettings(obj => obj["language"] = Strings.Language);
 
     /// <summary>Merge-writes one key into app-settings.json so independent
-    /// settings (language, tray hint) never clobber each other.</summary>
+    /// settings (language, tray hint) never clobber each other. Delegates
+    /// to AppSettingsStore — one writer for this file, through StateFile
+    /// (atomic, backed up; defect-8).</summary>
     private void UpdateSettings(Action<System.Text.Json.Nodes.JsonObject> edit)
-    {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(AppSettingsPath)!);
-            System.Text.Json.Nodes.JsonObject obj = new();
-            if (File.Exists(AppSettingsPath))
-            {
-                try { obj = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(AppSettingsPath)) as System.Text.Json.Nodes.JsonObject ?? new(); }
-                catch { obj = new(); }
-            }
-            edit(obj);
-            File.WriteAllText(AppSettingsPath, obj.ToJsonString());
-        }
-        catch { }
-    }
+        => AppSettingsStore.Update(AppSettingsPath, edit);
 
     private void LoadTrayHint()
     {
@@ -236,7 +271,7 @@ public sealed partial class MainWindow : Window
             ? $"{_cfg.FleetUrl.TrimEnd('/')}/panel/?device={device.Code}"
             : $"https://{_cfg.Host}:{_cfg.Port}/panel/";
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
-        catch (Exception ex) { StatusBarText.Text = $"Open in browser failed: {ex.Message} — URL: {url}"; }
+        catch { StatusBarText.Text = Strings.T("BrowserOpenFailed"); }
     }
 
     private void ReloadConfig()
@@ -245,12 +280,15 @@ public sealed partial class MainWindow : Window
         // unpaired states look like (real code + one-click offer vs the
         // plain pairing state).
         _localLink = ConsoleLink.TryRead(ConsoleLink.PathForDataDir(AgentConfig.DefaultDataDir()));
+        // The fleet's picture of this device belongs to the previous
+        // config until the next sync replaces it.
+        _fleetSelfCode = null;
+        _fleetSelfName = null;
+        _fleetSelfOnline = false;
         try
         {
             _cfg = ClientConfig.Load(_configPath);
-            ConfigStateText.Text = $"Direct device: {_cfg.Host}:{_cfg.Port}"
-                + (string.IsNullOrWhiteSpace(_cfg.FleetUrl) ? " · no fleet configured" : $" · fleet: {_cfg.FleetUrl}");
-            StatusBarText.Text = $"Config: {_configPath}";
+            _configError = null;
             _consolePublicKey = null;
             if (!string.IsNullOrWhiteSpace(_cfg.OperatorKeyFile) && File.Exists(_cfg.OperatorKeyFile))
             {
@@ -265,98 +303,234 @@ public sealed partial class MainWindow : Window
             // must never reach the footer (owner order, 2026-11-20).
             _cfg = null;
             _consolePublicKey = null;
-            ConfigStateText.Text = _localLink != null
-                ? $"{_localLink.DeviceName} · {_localLink.DeviceCode} · fleet: {_localLink.FleetUrl}"
-                : Strings.T("NotPairedHint");
-            StatusBarText.Text = "";
+            _configError = null;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // A config that exists but is broken is a real error — surface it.
+            // A config that exists but is broken is a real problem — said
+            // plainly, never as the raw exception (defect-4d). The file
+            // itself is preserved (StateFile never overwrites on a read).
             _cfg = null;
             _consolePublicKey = null;
-            ConfigStateText.Text = Strings.T("NotPairedHint");
-            StatusBarText.Text = ex.Message;
+            _configError = Strings.T("ConfigUnreadable");
         }
+        UpdateHeaderState();
         UpdateIdentityCard();
+        UpdateFooter();
+        StartFleetLoop();
+    }
+
+    private string? _configError;
+
+    /// <summary>The header's state line: mode + named state only. Network
+    /// addresses never render here (defect-9) — they belong to Settings
+    /// (where they are edited) and the diagnostics.</summary>
+    private void UpdateHeaderState()
+    {
+        if (ConfigStateText == null) return;
+        if (_cfg == null)
+            ConfigStateText.Text = _localLink != null
+                ? $"{_localLink.DeviceName} · {_localLink.DeviceCode}"
+                : Strings.T("NotPairedHint");
+        else if (!string.IsNullOrWhiteSpace(_cfg.FleetUrl))
+            ConfigStateText.Text = _awaitingApproval
+                ? Strings.T("AwaitingApprovalStatus")
+                : Strings.T(_fleetReachable ? "HeaderFleetUp" : "HeaderFleetDown");
+        else
+            ConfigStateText.Text = Strings.T("DirectDevice");
+    }
+
+    /// <summary>The footer is a product status line, rendered from state
+    /// in exactly one place: approval beats connectivity, a live fleet
+    /// shows its summary, a down fleet shows the calm reconnecting line
+    /// (never an exception, never an address).</summary>
+    private void UpdateFooter()
+    {
+        if (StatusBarText == null) return;
+        if (_awaitingApproval)
+            StatusBarText.Text = Strings.T("AwaitingApprovalStatus");
+        else if (_cfg != null && !string.IsNullOrWhiteSpace(_cfg.FleetUrl))
+            StatusBarText.Text = _fleetReachable ? _lastSummary : Strings.T("Reconnecting");
+        else if (_cfg != null)
+            StatusBarText.Text = _lastSummary != "" ? _lastSummary : Strings.T("DirectModeLine");
+        else
+            StatusBarText.Text = _configError ?? "";
+    }
+
+    /// <summary>(Re)starts the automatic fleet connection for the current
+    /// config (defect-6): the loop syncs immediately, polls every 30 s
+    /// while up so device states stay live without a manual refresh, and
+    /// retries with capped backoff while down — the owner never presses
+    /// anything to be connected. Direct-only configs get one sync.</summary>
+    private void StartFleetLoop()
+    {
+        // Cancel and drop (never Dispose: the old loop may still be
+        // unwinding against its token; the GC reclaims the source).
+        _fleetLoopCts?.Cancel();
+        _fleetLoop = null;
+        _fleetLoopCts = null;
+        if (_cfg == null || string.IsNullOrWhiteSpace(_cfg.FleetUrl))
+        {
+            if (_cfg != null) _ = RefreshDevicesAsync();
+            return;
+        }
+        var loop = new ReconnectLoop(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(30));
+        var cts = new CancellationTokenSource();
+        _fleetLoop = loop;
+        _fleetLoopCts = cts;
+        loop.PhaseChanged += phase => Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_fleetLoop, loop)) return;   // a replaced loop must not repaint
+            AppTray.SetOnline(phase == LinkPhase.Up);
+            UpdateHeaderState();
+            UpdateFooter();
+        });
+        _ = loop.RunAsync(async (ct, markUp) =>
+        {
+            if (await SyncFleetOnceAsync()) markUp();
+        }, cts.Token);
     }
 
     private async void OnRefreshClick(object? sender, RoutedEventArgs e) => await RefreshDevicesAsync();
 
+    /// <summary>One immediate sync (manual refresh, wizard/settings
+    /// returns). The automatic loop runs the same path on its schedule;
+    /// the gate keeps the two from overlapping.</summary>
     private async Task RefreshDevicesAsync()
     {
+        var reachable = await SyncFleetOnceAsync();
+        AppTray.SetOnline(reachable);
+        UpdateHeaderState();
+        UpdateFooter();
+    }
+
+    private async Task<bool> SyncFleetOnceAsync()
+    {
+        await _syncGate.WaitAsync();
+        try { return await SyncFleetCoreAsync(); }
+        finally { _syncGate.Release(); }
+    }
+
+    /// <summary>One fleet sync. Returns true when the fleet ANSWERED
+    /// (device list fetched, or the approval state) — the reconnect
+    /// loop's up signal. All state text is rendered by UpdateFooter /
+    /// UpdateHeaderState from the fields set here; no exception text
+    /// ever reaches the UI (defect-4d).</summary>
+    private async Task<bool> SyncFleetCoreAsync()
+    {
+        // The link is re-read every sync (defect-7): an agent that
+        // enrolls — or re-enrolls — after this app started is picked
+        // up without reopening anything, and the identity card follows.
+        _localLink = ConsoleLink.TryRead(ConsoleLink.PathForDataDir(AgentConfig.DefaultDataDir()));
+
         if (_cfg == null)
         {
             _allDevices = new List<DeviceItem>();
             DevicesList.ItemsSource = Array.Empty<DeviceItem>();
             UpdateIdentityCard();
-            return;
+            return false;
         }
 
-        List<DeviceItem> items;
-        if (!string.IsNullOrWhiteSpace(_cfg.FleetUrl))
-        {
-            try
-            {
-                using var fleet = EsoAgent.Client.Program.CreateFleetClient(_cfg);
-                var devices = await fleet.GetDevicesAsync();
-                _fleetReachable = true;
-                _awaitingApproval = false;
-                items = devices.Select(DeviceItem.FromFleet).ToList();
-                var badge = "";
-                try
-                {
-                    var health = await fleet.GetHealthAsync();
-                    foreach (var item in items)
-                    {
-                        var h = health.FirstOrDefault(x => x.Code == item.Code);
-                        if (h != null) item.HealthOverall = h.Overall;
-                    }
-                    var alerts = await fleet.GetActivityAsync(new ActivityQuery
-                    {
-                        Source = "alert",
-                        Since = DateTimeOffset.UtcNow.AddHours(-24),
-                        Limit = 500,
-                    });
-                    if (alerts.Count > 0) badge = $" · ⚠ {alerts.Count} alert(s) in the last 24 h (see Activity)";
-                }
-                catch { /* health/alerts are additive — never block the device list */ }
-                StatusBarText.Text = $"Fleet: {items.Count} device(s), {items.Count(d => d.Online)} online, {items.Count(d => d.IsPending)} pending.{badge}";
-                AppTray.SetOnline(true);
-            }
-            catch (Exception ex)
-            {
-                _fleetReachable = false;
-                items = new List<DeviceItem> { DeviceItem.Direct(_cfg.Host) };
-                if (IsAuthFailure(ex))
-                {
-                    // The server ANSWERED — it just does not trust this
-                    // console's operator key yet. That is the calm approval
-                    // state, not a connectivity failure.
-                    _awaitingApproval = true;
-                    StatusBarText.Text = Strings.T("AwaitingApprovalStatus");
-                }
-                else
-                {
-                    StatusBarText.Text = $"Fleet unreachable ({ex.Message}) — showing the direct device only.";
-                }
-                AppTray.SetOnline(false);
-            }
-        }
-        else
+        if (string.IsNullOrWhiteSpace(_cfg.FleetUrl))
         {
             _fleetReachable = false;
-            items = new List<DeviceItem> { DeviceItem.Direct(_cfg.Host) };
-            StatusBarText.Text = "Direct mode: one configured device (add a fleet URL in Settings to see the whole fleet).";
+            _awaitingApproval = false;
+            _lastSummary = "";
+            CommitDevices(new List<DeviceItem> { DeviceItem.Direct(_cfg.Host) });
+            return false;
         }
 
+        try
+        {
+            using var fleet = EsoAgent.Client.Program.CreateFleetClient(_cfg);
+            var devices = await fleet.GetDevicesAsync();
+            _fleetReachable = true;
+            _awaitingApproval = false;
+            var items = devices.Select(DeviceItem.FromFleet).ToList();
+            var alerts = 0;
+            try
+            {
+                var health = await fleet.GetHealthAsync();
+                foreach (var item in items)
+                {
+                    var h = health.FirstOrDefault(x => x.Code == item.Code);
+                    if (h != null) item.HealthOverall = h.Overall;
+                }
+                var recent = await fleet.GetActivityAsync(new ActivityQuery
+                {
+                    Source = "alert",
+                    Since = DateTimeOffset.UtcNow.AddHours(-24),
+                    Limit = 500,
+                });
+                alerts = recent.Count;
+            }
+            catch { /* health/alerts are additive — never block the device list */ }
+
+            var total = items.Count;
+            var online = items.Count(d => d.Online);
+            var pending = items.Count(d => d.IsPending);
+            CaptureFleetSelf(items);
+            // Defect-1: this machine is never its own connect target.
+            items = SelfDevice.ExcludingSelf(items, d => d.Code, SelfCode);
+            _lastSummary = $"{total} {Strings.T("DeviceCountWord")} · {online} {Strings.T("Online")} · {pending} {Strings.T("PendingWord")}"
+                + (alerts > 0 ? $" · ⚠ {alerts} {Strings.T("Alerts24h")}" : "");
+            CommitDevices(items);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            if (IsAuthFailure(ex))
+            {
+                // The server ANSWERED — it just does not trust this
+                // console's operator key yet. That is the calm approval
+                // state, not a connectivity failure, and the loop keeps
+                // polling: approval takes effect on its own.
+                _fleetReachable = true;
+                _awaitingApproval = true;
+                if (_allDevices.Count == 0)
+                    CommitDevices(new List<DeviceItem> { DeviceItem.Direct(_cfg.Host) });
+                else
+                    UpdateIdentityCard();
+                return true;
+            }
+            _fleetReachable = false;
+            _awaitingApproval = false;
+            // Keep the last-good list under the calm Reconnecting footer
+            // instead of collapsing it; the direct fallback is only for
+            // a console that has never seen the fleet.
+            if (_allDevices.Count == 0)
+                CommitDevices(new List<DeviceItem> { DeviceItem.Direct(_cfg.Host) });
+            else
+                UpdateIdentityCard();
+            return false;
+        }
+    }
+
+    /// <summary>Remembers this device as the fleet reported it (before
+    /// self-exclusion) for the identity card and the SelfCode fallback.</summary>
+    private void CaptureFleetSelf(List<DeviceItem> fleetItems)
+    {
+        var self = PairingSupport.FindThisDevice(fleetItems);
+        _fleetSelfCode = self?.Code;
+        _fleetSelfName = self?.Name;
+        _fleetSelfOnline = self?.Online ?? false;
+    }
+
+    private void CommitDevices(List<DeviceItem> items)
+    {
         foreach (var item in items)
+        {
             item.IsFavourite = item.Code != null && _favourites.Contains(item.Code);
+            item.SessionPhase = DesktopTab.Session.IsActiveFor(item.Code)
+                ? DesktopTab.Session.Phase
+                : DesktopSessionPhase.Idle;
+        }
         var previousCode = (DevicesList.SelectedItem as DeviceItem)?.Code;
         _allDevices = items;
         UpdateGroupFilter();
         UpdateIdentityCard();
         ApplyDeviceFilter(previousCode);
+        UpdateHeaderState();
     }
 
     private void OnDeviceSelected(object? sender, SelectionChangedEventArgs e)
@@ -372,7 +546,6 @@ public sealed partial class MainWindow : Window
         ActivityTab.Attach(_cfg, device);
         AccessTab.Attach(_cfg, device);
         OpenBrowserButton.IsEnabled = true;
-        Title = $"EsoAgent — {device.Name}";
     }
 
     // ---------- Phase 2 home: filter, identity, one-click connect ----------
@@ -401,6 +574,13 @@ public sealed partial class MainWindow : Window
         var current = selectCode ?? (DevicesList.SelectedItem as DeviceItem)?.Code;
         DevicesList.ItemsSource = ordered;
         DevicesList.SelectedItem = ordered.FirstOrDefault(d => d.Code == current) ?? ordered.FirstOrDefault();
+        if (DevicesEmptyText != null)
+        {
+            DevicesEmptyText.IsVisible = ordered.Count == 0;
+            DevicesEmptyText.Text = query.Length > 0 || group != null
+                ? Strings.T("NoSearchMatches")
+                : Strings.T("NoDevicesYet");
+        }
     }
 
     private void UpdateGroupFilter()
@@ -429,51 +609,42 @@ public sealed partial class MainWindow : Window
         ApplyDeviceFilter();
     }
 
-    /// <summary>The identity card: this computer's name always; its device code
-    /// in large type when this computer's own agent is enrolled in the fleet
-    /// (found by local-IP or machine-name match); otherwise the pairing state.</summary>
+    /// <summary>The identity card, decided by Core's IdentityCard from the
+    /// facts (pairing, console link, the fleet's row for this device,
+    /// reachability) — defects 4 + 7: the local agent's identity shows
+    /// regardless of fleet reachability, a fleet outage renders as
+    /// Reconnecting (never as unenrollment), and Pair appears only for
+    /// a genuine first run. No addresses render here (defect-9).</summary>
     private void UpdateIdentityCard()
     {
         if (IdentityNameText == null) return;
-        IdentityNameText.Text = !string.IsNullOrWhiteSpace(_consoleName) ? _consoleName! : Environment.MachineName;
-        UseFleetButton.IsVisible = false;
-        PairButton.IsVisible = true;
+        var state = IdentityCard.Resolve(
+            hasClientConfig: _cfg != null,
+            localLink: _localLink,
+            fleetSelfCode: _fleetSelfCode,
+            fleetSelfName: _fleetSelfName,
+            fleetSelfOnline: _fleetSelfOnline,
+            fleetReachable: _fleetReachable,
+            awaitingApproval: _awaitingApproval);
+
+        IdentityNameText.Text = !string.IsNullOrWhiteSpace(_consoleName)
+            ? _consoleName!
+            : !string.IsNullOrWhiteSpace(state.Name) ? state.Name! : Environment.MachineName;
+        IdentityCodeText.Text = state.Code ?? "—";
+        IdentityDetailText.Text = state.Detail switch
+        {
+            IdentityDetail.SelfOnline => Strings.T("Online"),
+            IdentityDetail.SelfOffline => Strings.T("Offline"),
+            IdentityDetail.LocalAgentEnrolled => _cfg == null ? Strings.T("LocalAgentFound") : Strings.T("LocalAgentEnrolled"),
+            IdentityDetail.AwaitingApproval => Strings.T("AwaitingApprovalStatus"),
+            IdentityDetail.Reconnecting => Strings.T("Reconnecting"),
+            IdentityDetail.NotPaired => Strings.T("NotPairedHint"),
+            _ => Strings.T("ThisPcNotEnrolled"),   // ConsoleOnly — stated only on a live fleet answer
+        };
+        PairButton.IsVisible = state.ShowPair;
+        UseFleetButton.IsVisible = state.ShowUseFleet;
         AwaitingApprovalPanel.IsVisible = _awaitingApproval && _consolePublicKey != null;
         if (_consolePublicKey != null) ConsoleKeyBox.Text = _consolePublicKey;
-        var self = PairingSupport.FindThisDevice(_allDevices);
-        if (self != null)
-        {
-            IdentityCodeText.Text = self.Code;
-            var parts = new List<string> { self.Online ? "Online" : "Offline" };
-            if (self.VirtualIp != null) parts.Add($"mesh {self.VirtualIp}");
-            IdentityDetailText.Text = string.Join(" · ", parts);
-        }
-        else if (_cfg == null && _localLink != null)
-        {
-            // No console pairing yet, but THIS machine's own agent is
-            // fleet-enrolled (it published a console link): show its real
-            // code and offer the one-click adoption — never the bare "—"
-            // and "not paired" the owner photographed on his laptop.
-            if (string.IsNullOrWhiteSpace(_consoleName)) IdentityNameText.Text = _localLink.DeviceName;
-            IdentityCodeText.Text = _localLink.DeviceCode;
-            IdentityDetailText.Text = Strings.T("LocalAgentFound");
-            UseFleetButton.IsVisible = true;
-            PairButton.IsVisible = false;
-        }
-        else if (_cfg == null)
-        {
-            IdentityCodeText.Text = "—";
-            IdentityDetailText.Text = Strings.T("NotPairedHint");
-        }
-        else
-        {
-            IdentityCodeText.Text = "—";
-            IdentityDetailText.Text = _awaitingApproval
-                ? Strings.T("AwaitingApprovalStatus")
-                : !string.IsNullOrWhiteSpace(_cfg.FleetUrl)
-                    ? $"{_cfg.FleetUrl} · {Strings.T(_fleetReachable ? "FleetReachable" : "FleetNotReached")} · {Strings.T("ThisPcNotEnrolled")}"
-                    : $"{Strings.T("DirectMode")}: {_cfg.Host}:{_cfg.Port}";
-        }
     }
 
     /// <summary>The one session-start path for every home affordance: select the
@@ -481,7 +652,21 @@ public sealed partial class MainWindow : Window
     /// session — one click from a row, a recent, a double-click, or a code.</summary>
     private async Task ConnectToDeviceAsync(DeviceItem device)
     {
+        // Defect-1, defence in depth: self is filtered from every list,
+        // and a direct attempt still lands on the plain message.
+        if (SelfDevice.IsSelf(device.Code, SelfCode))
+        {
+            CodeStateText.Text = Strings.T("ThisIsThisDevice");
+            return;
+        }
         if (!device.CanConnect) return;
+        if (DesktopTab.Session.IsActiveFor(device.Code))
+        {
+            // Already in session with this device: just go to it.
+            DevicesList.SelectedItem = device;
+            MainTabs.SelectedItem = DesktopTabItem;
+            return;
+        }
         if (DevicesList.ItemsSource is List<DeviceItem> visible && !visible.Contains(device))
         {
             SearchBox.Text = "";
@@ -499,8 +684,31 @@ public sealed partial class MainWindow : Window
         if (sender is Control { DataContext: DeviceItem device })
         {
             e.Handled = true;
+            // The row action follows the real session state (defect-2):
+            // for the session's own device it IS the disconnect/cancel.
+            if (DesktopTab.Session.IsActiveFor(device.Code)
+                && DesktopTab.Session.Phase is DesktopSessionPhase.Connecting or DesktopSessionPhase.Connected)
+            {
+                if (!ReferenceEquals(DevicesList.SelectedItem, device)) DevicesList.SelectedItem = device;
+                MainTabs.SelectedItem = DesktopTabItem;
+                await DesktopTab.DisconnectSessionAsync();
+                return;
+            }
             await ConnectToDeviceAsync(device);
         }
+    }
+
+    /// <summary>Mirrors the session tracker's phase onto the device rows
+    /// and recents on every transition (defect-2): the row for the
+    /// session's device shows Connecting… / Disconnect, every other row
+    /// stays at Connect.</summary>
+    private void SyncRowSessionStates()
+    {
+        var tracker = DesktopTab.Session;
+        foreach (var item in _allDevices)
+            item.SessionPhase = tracker.IsActiveFor(item.Code) ? tracker.Phase : DesktopSessionPhase.Idle;
+        ApplyDeviceFilter();
+        RenderRecents();
     }
 
     private async void OnDeviceDoubleTapped(object? sender, TappedEventArgs e)
@@ -517,10 +725,10 @@ public sealed partial class MainWindow : Window
         {
             using var fleet = EsoAgent.Client.Program.CreateFleetClient(_cfg);
             await fleet.PostRegistryActionAsync("approve", new { code = device.Code });
-            StatusBarText.Text = $"Approved {device.Name} ({device.Code}).";
+            StatusBarText.Text = $"{device.Name} ({device.Code}) — {Strings.T("ApprovedWord")}";
             await RefreshDevicesAsync();
         }
-        catch (Exception ex) { StatusBarText.Text = $"Approve failed: {ex.Message}"; }
+        catch { StatusBarText.Text = Strings.T("ApproveFailedPlain"); }
     }
 
     private void OnRowStarClick(object? sender, RoutedEventArgs e)
@@ -537,6 +745,7 @@ public sealed partial class MainWindow : Window
     private void RecordRecent(DeviceItem device)
     {
         if (device.Code == null) return;
+        if (SelfDevice.IsSelf(device.Code, SelfCode)) return;   // self is never a connect target (defect-1)
         _recents.RemoveAll(r => string.Equals(r.Code, device.Code, StringComparison.OrdinalIgnoreCase));
         _recents.Insert(0, new RecentEntry { Code = device.Code, Name = device.Name, At = DateTimeOffset.UtcNow });
         _recents = _recents.Take(8).ToList();
@@ -548,9 +757,20 @@ public sealed partial class MainWindow : Window
     {
         if (RecentsPanel == null) return;
         RecentsPanel.Children.Clear();
+        var visible = 0;
         foreach (var recent in _recents)
         {
-            var button = new Button { Content = $"{recent.Name} · {recent.Code}", Tag = recent.Code, Margin = new Avalonia.Thickness(0, 0, 6, 6) };
+            // Recents persisted before the self-exclusion fix can still
+            // hold this machine's own code — never render it (defect-1).
+            if (SelfDevice.IsSelf(recent.Code, SelfCode)) continue;
+            visible++;
+            var live = DesktopTab.Session.IsActiveFor(recent.Code);
+            var button = new Button
+            {
+                Content = $"{recent.Name} · {recent.Code}" + (live ? $" · {Strings.T("ConnectedWord")}" : ""),
+                Tag = recent.Code,
+                Margin = new Avalonia.Thickness(0, 0, 6, 6),
+            };
             button.Click += async (_, _) =>
             {
                 var device = _allDevices.FirstOrDefault(d => string.Equals(d.Code, recent.Code, StringComparison.OrdinalIgnoreCase));
@@ -560,7 +780,7 @@ public sealed partial class MainWindow : Window
             };
             RecentsPanel.Children.Add(button);
         }
-        RecentsBlock.IsVisible = _recents.Count > 0;
+        RecentsBlock.IsVisible = visible > 0;
     }
 
     private async void OnCodeConnectClick(object? sender, RoutedEventArgs e) => await ConnectByCodeAsync();
@@ -583,6 +803,11 @@ public sealed partial class MainWindow : Window
             return;
         }
         var code = raw.ToUpperInvariant();
+        if (SelfDevice.IsSelf(code, SelfCode))
+        {
+            CodeStateText.Text = Strings.T("ThisIsThisDevice");
+            return;
+        }
         var device = _allDevices.FirstOrDefault(d => string.Equals(d.Code, code, StringComparison.OrdinalIgnoreCase));
         if (device == null && _cfg != null && !string.IsNullOrWhiteSpace(_cfg.FleetUrl))
         {
@@ -597,8 +822,8 @@ public sealed partial class MainWindow : Window
         if (!device.CanConnect)
         {
             CodeStateText.Text = device.IsPending
-                ? $"{device.Name} ({device.Code}) is pending approval."
-                : $"{device.Name} ({device.Code}) cannot be connected to.";
+                ? $"{device.Name} ({device.Code}) {Strings.T("PendingSuffix")}"
+                : $"{device.Name} ({device.Code}) {Strings.T("CannotConnectSuffix")}";
             return;
         }
         CodeStateText.Text = "";
@@ -647,9 +872,9 @@ public sealed partial class MainWindow : Window
             ReloadConfig();
             await RefreshDevicesAsync(); // success pairs fully; a 401 sets the approval state — neither is faked
         }
-        catch (Exception ex)
+        catch
         {
-            StatusBarText.Text = $"{Strings.T("ProbeFailedPrefix")}{ex.Message}";
+            StatusBarText.Text = Strings.T("ProbeFailedPlain");
         }
         finally
         {

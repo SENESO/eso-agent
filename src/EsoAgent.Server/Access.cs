@@ -26,23 +26,21 @@ public sealed class AccessStore
     public AccessStore(string dataDir)
     {
         _path = Path.Combine(dataDir, "access.json");
-        try
+        // Backup-aware (defect-8): a torn access file recovers from its
+        // last-good backup; a doubly-corrupt one is quarantined (bytes
+        // preserved) instead of silently dropping every code and grant.
+        var status = StateFile.TryReadJson<AccessFile>(_path, out var file);
+        if (file != null)
         {
-            if (File.Exists(_path))
-            {
-                var file = JsonSerializer.Deserialize<AccessFile>(File.ReadAllText(_path), EsoJson.Options);
-                _codes = file?.Codes ?? new();
-                _grants = file?.Grants ?? new();
-            }
+            _codes = file.Codes ?? new();
+            _grants = file.Grants ?? new();
         }
-        catch { _codes = new(); _grants = new(); }
+        else if (status == StateFileRead.Corrupt) StateFile.QuarantineCorrupt(_path);
     }
 
     private void Save()
     {
-        var tmp = _path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(new AccessFile { Codes = _codes, Grants = _grants }, EsoJson.Options));
-        File.Move(tmp, _path, overwrite: true);
+        StateFile.WriteText(_path, JsonSerializer.Serialize(new AccessFile { Codes = _codes, Grants = _grants }, EsoJson.Options));
     }
 
     public AccessCodeRecord AddCode(AccessCodeRecord code) { lock (_gate) { _codes.Add(code); Save(); return code; } }

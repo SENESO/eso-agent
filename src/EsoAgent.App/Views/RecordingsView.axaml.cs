@@ -75,7 +75,7 @@ public sealed partial class RecordingsView : UserControl
             EmptyText.IsVisible = list.Count == 0;
             StateText.Text = $"{list.Count} recording(s) · {DateTime.Now:T}";
         }
-        catch (Exception ex) { StateText.Text = $"Recordings failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("LoadFailedPlain"); }
     }
 
     private async void OnRefreshClick(object? sender, RoutedEventArgs e) => await LoadAsync();
@@ -134,7 +134,7 @@ public sealed partial class RecordingsView : UserControl
             StateText.Text = reply.Ok ? $"Deleted {item.Info.Name}." : $"Delete failed: {reply.Error ?? reply.Text}";
             if (reply.Ok) await LoadAsync();
         }
-        catch (Exception ex) { StateText.Text = $"Delete failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("ActionFailedPlain"); }
     }
 }
 

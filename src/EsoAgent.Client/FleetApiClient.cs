@@ -34,6 +34,16 @@ public sealed class FleetApiClient : IDisposable
         _http = new HttpClient(handler) { BaseAddress = new Uri(cfg.FleetUrl!), Timeout = TimeSpan.FromMinutes(35) };
     }
 
+    /// <summary>Test seam: the production ctor builds its own HttpClient; tests
+    /// inject a handler-backed one and assert the exact wire shape (per-chunk
+    /// signatures, resume, commit). The client never touches the socket then.</summary>
+    internal FleetApiClient(ClientConfig cfg, ECDsa operatorKey, HttpClient http)
+    {
+        _cfg = cfg;
+        _operatorKey = operatorKey;
+        _http = http;
+    }
+
     private HttpRequestMessage Signed(HttpMethod method, string pathAndQuery, byte[] body)
     {
         var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -156,14 +166,132 @@ public sealed class FleetApiClient : IDisposable
     public Task<JsonElement> RecordScriptRunAsync(string id, ScriptRunRecordRequest req)
         => SendAsync<JsonElement>(HttpMethod.Post, $"/fleet/scripts/{Uri.EscapeDataString(id)}/runs", req);
 
-    public async Task<JsonElement> UploadUpdatePackageAsync(byte[] zipBytes)
+    /// <summary>Chunked update-package upload (v1.3.2, BUILD-REPORT §25 follow-up).
+    /// The old single-shot PUT signed ONCE and then spent ~15 min in flight on a
+    /// slow link, arriving stale against the 120 s operator-signature skew (401).
+    /// Each 256 KiB chunk is now its OWN signed request (fresh timestamp, small
+    /// body), the upload resumes from the server's received offset after any
+    /// interruption, and the commit re-verifies the whole-file hash. Returns the
+    /// staged PackageInfo, same shape as the old single-shot call.</summary>
+    public async Task<JsonElement> UploadUpdatePackageAsync(string filePath, IProgress<(long Sent, long Total)>? progress = null, CancellationToken ct = default)
     {
-        using var req = Signed(HttpMethod.Put, "/fleet/update/package", zipBytes);
-        req.Content = new ByteArrayContent(zipBytes) { Headers = { ContentType = new MediaTypeHeaderValue("application/zip") } };
-        using var res = await _http.SendAsync(req);
-        var text = await res.Content.ReadAsStringAsync();
-        if (!res.IsSuccessStatusCode) throw new HttpRequestException($"Fleet server returned {(int)res.StatusCode}: {text}");
-        return JsonSerializer.Deserialize<JsonElement>(text, EsoJson.Options);
+        await using var fs = File.OpenRead(filePath);
+        var sha = Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant();
+        fs.Position = 0;
+        return await UploadUpdatePackageAsync(fs, new FileInfo(filePath).Length, sha, progress, ct);
+    }
+
+    /// <summary>In-memory variant of the chunked upload (small packages, tests).</summary>
+    public Task<JsonElement> UploadUpdatePackageAsync(byte[] zipBytes)
+    {
+        var sha = FileTransferService.HashBytes(zipBytes);
+        return UploadUpdatePackageAsync(new MemoryStream(zipBytes), zipBytes.LongLength, sha);
+    }
+
+    private async Task<JsonElement> UploadUpdatePackageAsync(Stream stream, long totalSize, string sha, IProgress<(long Sent, long Total)>? progress = null, CancellationToken ct = default)
+    {
+        if (totalSize <= 0) throw new InvalidDataException("Empty package.");
+        // Resume: ask what the server already holds for THIS exact package.
+        var state = await GetChunkedUploadStateAsync(ct);
+        var received = string.Equals(state.Sha256, sha, StringComparison.OrdinalIgnoreCase) ? state.Received : 0;
+        if (state is { Received: > 0 } && received == 0)
+        {
+            // A different package's upload is in progress — abort it, then start ours.
+            await AbortChunkedUploadAsync(ct);
+        }
+
+        var chunkSize = FileTransferService.PackageChunkSize;
+        while (received < totalSize)
+        {
+            var sent = false;
+            for (var attempt = 1; attempt <= 3 && !sent; attempt++)
+            {
+                // (Re)read the chunk inside the attempt loop: a 409 rewind
+                // moves `received`, and the retry must send the bytes that
+                // live at the NEW offset, not the old ones.
+                var length = (int)Math.Min(chunkSize, totalSize - received);
+                var chunk = new byte[length];
+                stream.Position = received;
+                var read = 0;
+                while (read < length)
+                {
+                    var n = await stream.ReadAsync(chunk.AsMemory(read, length - read), ct);
+                    if (n == 0) throw new EndOfStreamException($"Package stream ended at {received + read} of {totalSize} bytes.");
+                    read += n;
+                }
+                try
+                {
+                    // Fresh signature per chunk: the timestamp is taken at send
+                    // time, so a chunk is never older than its own flight.
+                    using var req = Signed(HttpMethod.Put,
+                        $"/fleet/update/package/chunk?sha256={sha}&offset={received}&total={totalSize}", chunk);
+                    req.Content = new ByteArrayContent(chunk) { Headers = { ContentType = new MediaTypeHeaderValue("application/octet-stream") } };
+                    using var res = await _http.SendAsync(req, ct);
+                    var text = await res.Content.ReadAsStringAsync(ct);
+                    if (res.IsSuccessStatusCode)
+                    {
+                        var dto = JsonSerializer.Deserialize<ChunkedUploadStateDto>(text, EsoJson.Options);
+                        received = dto?.Received ?? received + length;
+                        sent = true;
+                    }
+                    else if ((int)res.StatusCode == 409)
+                    {
+                        // Offset drifted (a retried chunk already landed, or a
+                        // stale resume): re-ask and continue from the server's
+                        // truth instead of assuming.
+                        var fresh = await GetChunkedUploadStateAsync(ct);
+                        if (!string.Equals(fresh.Sha256, sha, StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidOperationException($"Fleet server holds a different chunked upload (sha256 {fresh.Sha256}); abort it first.");
+                        if (fresh.Received >= received + length) { received = fresh.Received; sent = true; }
+                        else received = fresh.Received;
+                        if (attempt == 3 && !sent)
+                            throw new HttpRequestException($"Fleet server returned 409: {text}");
+                    }
+                    else if (attempt == 3)
+                    {
+                        throw new HttpRequestException($"Fleet server returned {(int)res.StatusCode}: {text}");
+                    }
+                    else
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
+                    }
+                }
+                catch (HttpRequestException) when (attempt < 3)
+                {
+                    // Transient transport failure (not a 4xx verdict — those throw
+                    // on the final attempt and escape this filter): retry the chunk.
+                    await Task.Delay(TimeSpan.FromSeconds(attempt), ct);
+                }
+            }
+            progress?.Report((received, totalSize));
+        }
+
+        return await SendWithCancellationAsync<JsonElement>(HttpMethod.Post, "/fleet/update/package/commit",
+            new ChunkedUploadCommitRequest { Sha256 = sha, Size = totalSize }, ct);
+    }
+
+    private Task<ChunkedUploadStateDto> GetChunkedUploadStateAsync(CancellationToken ct)
+        => SendWithCancellationAsync<ChunkedUploadStateDto>(HttpMethod.Get, "/fleet/update/package/upload-state", null, ct);
+
+    private async Task AbortChunkedUploadAsync(CancellationToken ct)
+    {
+        using var req = Signed(HttpMethod.Delete, "/fleet/update/package/upload", Array.Empty<byte>());
+        using var res = await _http.SendAsync(req, ct);
+        var text = await res.Content.ReadAsStringAsync(ct);
+        if (!res.IsSuccessStatusCode)
+            throw new HttpRequestException($"Fleet server returned {(int)res.StatusCode}: {text}");
+    }
+
+    private async Task<T> SendWithCancellationAsync<T>(HttpMethod method, string path, object? bodyObj, CancellationToken ct)
+    {
+        var body = bodyObj == null ? Array.Empty<byte>() : JsonSerializer.SerializeToUtf8Bytes(bodyObj, EsoJson.Options);
+        using var req = Signed(method, path, body);
+        using var res = await _http.SendAsync(req, ct);
+        var text = await res.Content.ReadAsStringAsync(ct);
+        if (!res.IsSuccessStatusCode)
+            throw new HttpRequestException($"Fleet server returned {(int)res.StatusCode}: {text}");
+        return JsonSerializer.Deserialize<T>(text, EsoJson.Options)
+               ?? throw new InvalidOperationException("Empty response from fleet server.");
     }
 
     public Task<RolloutCreatedResponse> CreateRolloutAsync(FleetTargets targets)

@@ -88,7 +88,7 @@ public sealed partial class TasksView : UserControl
             Render(states);
             StateText.Text = $"{_configs.Count} task(s) · {DateTime.Now:T}";
         }
-        catch (Exception ex) { StateText.Text = $"Tasks failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("LoadFailedPlain"); }
     }
 
     private List<ScheduleStateDto> _lastStates = new();
@@ -123,9 +123,9 @@ public sealed partial class TasksView : UserControl
             await LoadAsync();
             return true;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            StateText.Text = $"Save failed: {ex.Message}";
+            StateText.Text = Strings.T("TaskSaveFailed");
             return false;
         }
     }
@@ -176,7 +176,7 @@ public sealed partial class TasksView : UserControl
                 await LoadAsync();
             }
         }
-        catch (Exception ex) { StateText.Text = $"Run failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("ActionFailedPlain"); }
     }
 }
 

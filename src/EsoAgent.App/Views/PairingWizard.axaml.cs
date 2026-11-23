@@ -181,9 +181,9 @@ public sealed partial class PairingWizard : Window
             TestButton.IsEnabled = false;
             ProbeStateText.Text = url;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            ProbeStateText.Text = Strings.T("ProbeFailedPrefix") + ex.Message;
+            ProbeStateText.Text = Strings.T("ProbeFailedPlain");
         }
         finally { ProbeButton.IsEnabled = true; }
     }
@@ -209,7 +209,7 @@ public sealed partial class PairingWizard : Window
                 var (_, pub) = PairingSupport.EnsureOperatorKey(_keyPath);
                 ShowPublicKey(pub);
             }
-            catch (Exception ex) { KeyStateText.Text = ex.Message; }
+            catch (Exception) { KeyStateText.Text = Strings.T("KeyFailedPlain"); }
         }
         else
         {
@@ -228,7 +228,7 @@ public sealed partial class PairingWizard : Window
             var (_, pub) = PairingSupport.EnsureOperatorKey(_keyPath);
             ShowPublicKey(pub);
         }
-        catch (Exception ex) { KeyStateText.Text = ex.Message; }
+        catch (Exception) { KeyStateText.Text = Strings.T("KeyFailedPlain"); }
     }
 
     private void ShowPublicKey(string publicKeyBase64)
@@ -269,10 +269,10 @@ public sealed partial class PairingWizard : Window
             _testedDeviceCount = devices.Count;
             TestStateText.Text = $"{Strings.T("TestOkPrefix")}{devices.Count}{Strings.T("TestOkSuffix")}";
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             _testedOk = false;
-            TestStateText.Text = Strings.T("TestFailedPrefix") + ex.Message;
+            TestStateText.Text = Strings.T("TestFailedPlain");
         }
         finally { TestButton.IsEnabled = true; }
     }

@@ -54,7 +54,7 @@ public sealed partial class AccessView : UserControl
             StateText.Text = $"Code for {_device.Name} — expires {created.ExpiresAt.LocalDateTime:g}. Copy it now: it is shown once.";
             await LoadAsync();
         }
-        catch (Exception ex) { StateText.Text = $"Create failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("ActionFailedPlain"); }
         finally { CreateButton.IsEnabled = true; }
     }
 
@@ -70,7 +70,7 @@ public sealed partial class AccessView : UserControl
             RevokeBox.Text = "";
             await LoadAsync();
         }
-        catch (Exception ex) { StateText.Text = $"Revoke failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("ActionFailedPlain"); }
     }
 
     private async void OnRefreshClick(object? sender, RoutedEventArgs e) => await LoadAsync();
@@ -96,6 +96,6 @@ public sealed partial class AccessView : UserControl
             BodyText.Text = sb.ToString();
             StateText.Text = $"Updated {DateTime.Now:T}";
         }
-        catch (Exception ex) { StateText.Text = $"Load failed: {ex.Message}"; }
+        catch (Exception) { StateText.Text = Strings.T("LoadFailedPlain"); }
     }
 }

@@ -40,10 +40,15 @@ public sealed class ClientConfig
         var path = explicitPath
             ?? Environment.GetEnvironmentVariable("ESOAGENT_CLIENT_CONFIG")
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".esoagent", "client.json");
-        if (!File.Exists(path))
+        // Backup-aware (defect-8): a torn client.json recovers from its
+        // last-good backup instead of breaking every console operation;
+        // only a genuinely missing file is "not found", and a doubly-
+        // corrupt one is reported plainly, never silently replaced.
+        var status = StateFile.TryReadJson<ClientConfig>(path, out var cfg);
+        if (status == StateFileRead.Missing)
             throw new FileNotFoundException($"Client config not found at {path}. Create it with host, port, fingerprint and token.", path);
-        var cfg = JsonSerializer.Deserialize<ClientConfig>(File.ReadAllText(path), EsoJson.Options)
-                  ?? throw new InvalidDataException("Empty client config.");
+        if (cfg == null)
+            throw new InvalidDataException($"Client config at {path} is unreadable (corrupt, with no good backup).");
         if (string.IsNullOrWhiteSpace(cfg.Host)) throw new InvalidDataException("Client config missing 'host'.");
         cfg.TokenBytes = Convert.FromBase64String(cfg.Token.Trim());
         return cfg;

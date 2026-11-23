@@ -1,4 +1,5 @@
 using System.Text.Json;
+using EsoAgent.Core;
 
 namespace EsoAgent.Tray;
 
@@ -23,9 +24,12 @@ public static class TrayStrings
         _settingsPath = Path.Combine(dataDir, "tray-settings.json");
         try
         {
-            if (File.Exists(_settingsPath))
+            // StateFile.ReadText falls back to the last-good backup, so a
+            // torn settings file recovers the saved language (defect-8).
+            var text = StateFile.ReadText(_settingsPath);
+            if (text != null)
             {
-                using var doc = JsonDocument.Parse(File.ReadAllText(_settingsPath));
+                using var doc = JsonDocument.Parse(text);
                 if (doc.RootElement.TryGetProperty("language", out var lang))
                     IsArabic = lang.GetString() != "en";
             }
@@ -38,8 +42,7 @@ public static class TrayStrings
         IsArabic = !IsArabic;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
-            File.WriteAllText(_settingsPath, $"{{\"language\":\"{(IsArabic ? "ar" : "en")}\"}}");
+            StateFile.WriteText(_settingsPath, $"{{\"language\":\"{(IsArabic ? "ar" : "en")}\"}}");
         }
         catch { /* the choice still applies for this run */ }
     }

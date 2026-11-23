@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
@@ -49,43 +50,83 @@ public sealed class FleetClientService : BackgroundService
         public Dictionary<string, string>? Peers { get; set; }
     }
 
+    private NetworkAvailabilityChangedEventHandler? _availabilityHandler;
+    private NetworkAddressChangedEventHandler? _addressHandler;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         LoadPersistedSigners();
         RefreshConsoleLink();
-        var backoff = TimeSpan.FromSeconds(5);
-        while (!stoppingToken.IsCancellationRequested)
+        // Defect-6 (2026-11-22): the fleet link heals itself from every
+        // transient — server restart, network drop/change, laptop
+        // sleep/wake. The shared ReconnectLoop retries forever with
+        // capped backoff and restarts on ANY attempt exit (exception or
+        // clean close alike); re-registration is part of every attempt
+        // (RunConnectionAsync always sends the hello). OS network-change
+        // events nudge the loop so recovery is immediate instead of
+        // waiting out a backoff — on wake, an address change is the
+        // usual signal. The events are an accelerator only: where they
+        // never fire, the backoff still covers every case.
+        var loop = new ReconnectLoop(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
+        SubscribeNetworkNudges(loop);
+        try
         {
-            try
+            await loop.RunAsync(async (ct, markUp) =>
             {
-                await RunConnectionAsync(stoppingToken);
-                backoff = TimeSpan.FromSeconds(5);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-            catch (Exception ex)
-            {
-                _state.Audit.Write("fleet", $"connection failed: {ex.Message}", "retrying");
-            }
-            _state.FleetConnected = false;
-            try { await Task.Delay(backoff, stoppingToken); } catch { break; }
-            backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, TimeSpan.FromSeconds(60).Ticks));
+                try { await RunConnectionAsync(ct, markUp); }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    _state.Audit.Write("fleet", $"connection failed: {ex.Message}", "retrying");
+                    throw;
+                }
+                finally { _state.FleetConnected = false; }
+            }, stoppingToken);
         }
+        finally { UnsubscribeNetworkNudges(); }
+    }
+
+    private void SubscribeNetworkNudges(ReconnectLoop loop)
+    {
+        try
+        {
+            _availabilityHandler = (_, _) =>
+            {
+                _state.Audit.Write("fleet", "network availability changed — reconnecting now", "retry");
+                loop.Nudge();
+            };
+            _addressHandler = (_, _) => loop.Nudge();
+            NetworkChange.NetworkAvailabilityChanged += _availabilityHandler;
+            NetworkChange.NetworkAddressChanged += _addressHandler;
+        }
+        catch { /* best-effort accelerator — see ExecuteAsync */ }
+    }
+
+    private void UnsubscribeNetworkNudges()
+    {
+        try
+        {
+            if (_availabilityHandler != null) NetworkChange.NetworkAvailabilityChanged -= _availabilityHandler;
+            if (_addressHandler != null) NetworkChange.NetworkAddressChanged -= _addressHandler;
+        }
+        catch { }
     }
 
     private void LoadPersistedSigners()
     {
-        try
-        {
-            if (File.Exists(SignersFile))
-            {
-                var keys = JsonSerializer.Deserialize<TrustedKeys>(File.ReadAllText(SignersFile));
-                _operatorKey = keys?.Operator;
-                _panelKey = keys?.Panel;
-                if (keys?.Peers is { Count: > 0 } peers)
-                    _state.ApprovedPeers = new Dictionary<string, string>(peers, StringComparer.OrdinalIgnoreCase);
-            }
-        }
-        catch { _operatorKey = null; _panelKey = null; }
+        // Through StateFile (defect-8): a torn operator.pubs recovers its
+        // pinned keys from the last-good backup instead of silently
+        // starting keyless; a doubly-corrupt file is reported in the
+        // audit and its bytes are preserved, never overwritten here.
+        var status = StateFile.TryReadJson<TrustedKeys>(SignersFile, out var keys, new JsonSerializerOptions());
+        if (status == StateFileRead.RecoveredFromBackup)
+            _state.Audit.Write("fleet", "operator.pubs was unreadable — recovered the pinned keys from its last-good backup", "warn");
+        else if (status == StateFileRead.Corrupt)
+            _state.Audit.Write("fleet", "operator.pubs is unreadable and has no good backup — bytes preserved; starting without pinned keys until the next state frame", "warn");
+        _operatorKey = keys?.Operator;
+        _panelKey = keys?.Panel;
+        if (keys?.Peers is { Count: > 0 } peers)
+            _state.ApprovedPeers = new Dictionary<string, string>(peers, StringComparer.OrdinalIgnoreCase);
         // Keep AgentState in sync from boot, not only from the first state
         // frame: the P2P trust gate reads these before any frame arrives.
         _state.OperatorPublicKeySpki = _operatorKey;
@@ -108,7 +149,7 @@ public sealed class FleetClientService : BackgroundService
             // or different file is still written immediately — revocation
             // and approval changes alter the content, so they land at once.
             if (File.Exists(SignersFile) && File.ReadAllText(SignersFile) == json) return;
-            File.WriteAllText(SignersFile, json);
+            StateFile.WriteText(SignersFile, json);
         }
         catch { }
     }
@@ -157,7 +198,7 @@ public sealed class FleetClientService : BackgroundService
         catch { }
     }
 
-    private async Task RunConnectionAsync(CancellationToken ct)
+    private async Task RunConnectionAsync(CancellationToken ct, Action markUp)
     {
         var cfg = _state.Config;
         var fleet = cfg.Fleet;
@@ -194,6 +235,10 @@ public sealed class FleetClientService : BackgroundService
             Macs = WakeSender.LocalMacs(),
         }, ct);
         RefreshConsoleLink();
+        // The link is up: socket connected and the (re-)registration
+        // hello is on the wire. The reconnect loop resets its backoff
+        // on this signal.
+        markUp();
 
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var heartbeat = Task.Run(async () =>
@@ -283,7 +328,7 @@ public sealed class FleetClientService : BackgroundService
                 };
                 await SendAsync(ws, frame, ct);
                 offset += lines.Length;
-                try { File.WriteAllText(ActivityOffsetPath, offset.ToString()); } catch { }
+                try { StateFile.WriteText(ActivityOffsetPath, offset.ToString(), keepBackup: false); } catch { }
             }
             catch (OperationCanceledException) { break; }
             catch { /* shipping is best-effort; the next tick retries from the persisted offset */ }

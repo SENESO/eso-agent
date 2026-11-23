@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\EsoAgent.Core\EsoAgent.Core.csproj" />
+    <InternalsVisibleTo Include="EsoAgent.Tests" />
   </ItemGroup>
 </Project>

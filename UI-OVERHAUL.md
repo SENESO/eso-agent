@@ -421,3 +421,238 @@ proof pass.
   Automate/Measure, unified device view); AnyDesk accept-window permission
   toggles; RustDesk home layout (own ID left, remote ID + Connect/Transfer
   right, no account).
+
+---
+
+## App correctness lane — 2026-11-22 (owner verdicts 22:20–22:35, defects 1–9)
+
+Source: the owner's live use of the App on his laptop (the 22:20 photo —
+THIS DEVICE code "—", "not itself an enrolled device", a Pair / set up
+offer, a raw .NET timeout exception in the footer, his own device offered
+as a connect target, a decorative Connect button, no fullscreen) plus his
+follow-ups: automatic connection («الاتصال التلقائي»), the JSON files
+(«مشاكل ملفات json»), UI improvements («تحسين في الواجهه»), and no IP in
+the title («ظبط الحمايه شويه»). Commits (local, on top of 1.3.1):
+`5c8d3fc` Core seams, `90d75ff` state-file hardening + agent reconnect,
+`e0190d6` the App. Verification: solution build 0 warnings / 0 errors;
+suite 372 total / 371 pass / 1 fail — the one failure is the pre-existing
+`PackageVersion_StampRoundTrip`, unchanged from the 330-test baseline
+(+42 new tests, all passing). Screenshots cannot be captured in the
+build sandbox: the owner's live look is the visual gate for every
+taste item below.
+
+### Defect 1 — own device offered as a connect target
+- Cause: the shell rendered the fleet registry verbatim
+  (`RefreshDevicesAsync` → `DeviceItem.FromFleet` → list/recents/search);
+  nothing anywhere knew which row was "this machine".
+- Fix: Core `SelfDevice` (code identity from the console link, fleet row
+  as fallback; case-insensitive; null code is never self). The shell
+  captures the fleet's row for this device, then excludes self from the
+  device list; `RecordRecent` refuses self and `RenderRecents` skips
+  persisted self entries; connect-by-code to the own code and any direct
+  attempt answer with the plain "That's this device" line (EN/AR).
+- Tests: `SelfDeviceTests` (matching, null-safety, exclusion keeps the
+  direct device and other devices).
+
+### Defect 2 — Connect button decorative
+- Cause: session state was a private bool (`_connecting`) plus scattered
+  `IsEnabled` writes in `DesktopView`; `DeviceItem.ConnectLabel` was a
+  static string; rows had no session concept at all.
+- Fix: Core `DesktopSessionTracker` — a guarded state machine
+  (Idle → Connecting → Connected → Disconnecting → Idle) moved only by
+  real lifecycle points (attempt start, welcome frame, operator
+  disconnect, the client's SessionEnded). `DesktopView.ApplySessionUi`
+  derives every chrome state from the phase in one place; the shell
+  mirrors the phase onto rows and recents (`SyncRowSessionStates`): the
+  session device's row reads Connecting… / Disconnect and its click IS
+  the cancel/disconnect. A cancel during Connecting can no longer raise
+  a session behind the operator's back (the late success is disposed).
+- Tests: `DesktopSessionTrackerTests` (lifecycle, refused transitions,
+  connect-failure reset, stale end events cannot kill a new session,
+  change notifications) + `DesktopSessionTextTests` (raw "Session
+  error: …" reasons sanitize away; plain reasons pass through).
+
+### Defect 3 — fullscreen (and scaling)
+- Cause: fullscreen existed but F11 was handled only on the screen
+  border (focus-dependent), and Esc exited fullscreen only in View
+  mode — in Control mode it was forwarded to the remote machine.
+- Fix: F11 also handled at window level whenever the Desktop tab is
+  active (the border handler marks it handled, so no double toggle);
+  Esc now always exits fullscreen (chat-close keeps priority). The
+  toolbar button already existed. Scaling (Fit / Actual size / Stretch)
+  already existed in code and is unchanged.
+
+### Defect 4 + 7 — the incident: code "—", "not enrolled", Pair, raw exception
+- Cause (three stacked): `UpdateIdentityCard` only believed the fleet
+  device list — with the fleet unreachable the list was one direct
+  fallback item, `FindThisDevice` missed, and the card fell into the
+  "— / not enrolled / Pair" branch even though the console link on
+  that laptop read GY37-HEX3 the whole time; the console-link branch
+  only ran when there was NO client config. The footer's catch printed
+  `ex.Message` verbatim. There was no retry of any kind.
+- Fix: Core `IdentityCard.Resolve` decides the card from facts
+  (pairing, link, fleet self row, reachability, approval): the link's
+  code/name display unconditionally; "not enrolled" (ConsoleOnly) is
+  reachable only on a live fleet answer; unreachable renders
+  Reconnecting; Pair shows only for a genuine first run
+  (no config + no link + no fleet row). The shell reads the link in
+  the constructor — before the first render and any network call —
+  and re-reads it on every sync. Every raw-exception UI site in the
+  App (24 sites: shell, desktop, terminal, files, tasks, recordings,
+  access, status, activity, pairing wizard) now shows plain EN/AR
+  lines; session-end reasons pass through `DesktopSessionText`.
+- Tests: `IdentityCardTests` — the incident is a named regression
+  (paired + link + fleet down ⇒ code shown, Reconnecting, no Pair),
+  plus the full state matrix.
+
+### Defect 5 — polish + improvements (itemized; each is owner-vetoable)
+Correctness polish:
+- P1. Footer was a bare text block (no separator, no wrap — long lines
+  clipped). Now a real status bar: top border, surface background,
+  wrapping text, rendered from state in one place (`UpdateFooter`).
+- P2. Row status dot and PENDING/HEALTH badges used hard-coded colors
+  (LimeGreen/Gray/DarkGoldenrod/DarkOrange/DarkRed + white text). Now
+  theme tokens (new `EsoOkBrush`/`EsoWarnBrush`/`EsoBadBrush`; badges
+  are outlined chips on the surface token) and localized badge labels.
+- P3. Desktop session toolbars were non-wrapping horizontal stacks —
+  controls clipped at narrow widths. Both rows are WrapPanels now.
+- P4. The desktop screen area was a black void when idle. It now
+  carries a centered empty-state hint ("No session yet — press
+  Connect…", EN/AR).
+- P5. Chat watermark and the Privacy button label were hard-coded
+  English. Both localized (watermark set from the string table).
+- P6. The header state line was a technical dump (addresses + config
+  path in the footer). Replaced by named states (see defect 9); the
+  config path no longer renders anywhere.
+Improvements (structure/clarity, same identity):
+- I1. Device list empty state: an empty fleet or a fruitless search
+  explains itself ("No devices yet — …" / "No devices match your
+  search.") instead of a blank column.
+- I2. The device row's action is the primary connect affordance AND
+  the live session state (defect 2) — one obvious button, always
+  truthful; recents chips suffix the live device with "Connected".
+- I3. During a fleet outage the last-good device list stays on screen
+  under the calm Reconnecting footer instead of collapsing to a
+  single fallback row.
+- I4. Fleet summary footer is localized (device counts, online,
+  pending, 24 h alerts) in EN/AR.
+- I5. `app-settings.json` has a single writer now (the shell delegates
+  to `AppSettingsStore`), ending the two-writers drift risk.
+
+### Defect 6 — automatic connection, end to end
+- App cause: refresh happened only on open and on the Refresh button;
+  a fleet down at launch stayed down until pressed.
+- Agent cause (audit of `FleetClientService`): the hand loop was
+  unbounded with backoff, but its delay `catch { break; }` could end
+  the service on a non-cancellation throw, backoff reset on any clean
+  close, and nothing reacted to network/power changes — after a
+  sleep/wake the agent waited out its backoff like any failure.
+- Fix: one Core `ReconnectLoop` (+ `BackoffPolicy`) drives both.
+  Agent: unbounded retries, capped backoff (5 s → 60 s), restart on
+  ANY attempt exit, hello re-registration on every connection, and
+  `NetworkChange` availability/address events nudge an immediate
+  reconnect (the wake/network-change accelerator; the backoff still
+  covers platforms where events never fire). Console: sync on launch,
+  30 s live poll while up (device states stay live; a healthy polled
+  link stays Up across polls — no tray/footer flicker), capped
+  backoff while down, and the approval state is polled through, so
+  approval takes effect with no press. Manual Refresh still works
+  (immediate, gate-serialized with the loop).
+- Tests: `ReconnectLoopTests` (backoff sequence + cap + reset,
+  survival of exception and clean-failure attempts, mark-up →
+  poll cadence, nudge cuts a 30 s wait, cancellation stops cleanly).
+- Pending live proof (named, not claimed): sleep/wake recovery on the
+  owner's laptop across his next sleep cycle; P2P session initiation
+  between two agents is a separate, still-missing surface (unchanged
+  by this lane).
+
+### Defect 8 — JSON state files: audit + hardening
+One helper, Core `StateFile`: atomic (temp + replace) and
+content-gated writes, a last-good `.bak` per file refreshed on every
+write, reads that recover from the backup (self-healing the main
+file) and report `Corrupt` with the bytes preserved (stores quarantine
+to `<name>.corrupt-<timestamp>` instead of overwriting with defaults).
+Per-file findings (W = write weakness, R = read weakness):
+- `console-link.json` — was atomic already; R: parse failure = "no
+  agent" (the incident's root class). Now StateFile both ways.
+- `esoagent.json` (agent config) — W: atomic via Dashboard.SaveConfig
+  (kept, now StateFile). R: `AgentConfig.Load` deserialized with NO
+  guard — a torn file threw and the agent never started. Now backup
+  recovery; doubly-corrupt quarantines and the agent boots on
+  defaults (which include the shipped fleet hub).
+- `operator.pubs` — W: direct `File.WriteAllText` (torn-write risk),
+  content-gated already. R: failure silently dropped all pinned keys.
+  Now StateFile; recovery and corruption are audit-logged.
+- `owner.json` — W: direct overwrite. R: failure silently
+  un-configured owner auth. Now StateFile + quarantine on corrupt.
+- `schedules-state.json`, job records (`job.json`), `p2p-peers.json`
+  (peer cache) — W: atomic already, now StateFile. R: failure = silent
+  empty; now backup recovery (peers keep their self-consistency check).
+- `activity.offset` — W: direct overwrite of a counter; now atomic
+  via StateFile, deliberately backup-free.
+- Fleet server: `devices.json`, `server-settings.json`, `mesh.json`,
+  `access.json`, `queue.json`, `scripts.json`, `rollouts.json`,
+  `health.json`, package `info.json` — W: atomic already except
+  `info.json` (direct; fixed). R: EVERY store caught parse failure
+  into an empty state and the next save cemented the loss (a torn
+  registry = fleet amnesia). Now backup recovery; corrupt keeps the
+  in-memory state and quarantines the bytes.
+- `client.json` — W: direct overwrite (App `AppConfig.Save`). R: the
+  operational load threw on parse failure; the editor load threw too.
+  Now StateFile both ways; CLI load recovers from backup and reports
+  a doubly-corrupt file plainly.
+- `app-settings.json` — W: TWO direct writers (shell + store); now
+  one (store, via StateFile). R: failure = empty settings (language,
+  favourites, recents silently lost); now main → backup parse.
+- `tray-settings.json` — W: direct overwrite; R: fallback to default
+  language. Now StateFile.
+- Deliberately NOT backed up (credential hygiene): the API token file
+  (rotation must not leave a copy — atomic already), device/operator
+  private keys (write-once `CreateNew`, never overwritten). The kill
+  switch lock file is existence-based (content irrelevant). Mesh/WG
+  configs and the hosts file are system files, not JSON state
+  (content-gated already where it matters).
+- Tests: `StateFileTests` — write/backup round-trip, content gating,
+  garbage/truncated/empty main recovery + self-heal, missing-main
+  recovery, both-corrupt = Corrupt with bytes preserved, quarantine,
+  and the incident regression: a torn `console-link.json` still
+  yields GY37-HEX3.
+
+### Defect 9 — display/security hygiene
+- Cause: the window title and header carried live network data
+  (fleet URL, host:port, config path); the direct device's NAME was
+  its raw IP; rows and the identity card rendered mesh IPs; several
+  error lines embedded addresses with exception text.
+- Fix: title is product + version only (set in code; per-device title
+  changes removed); header + identity show named states
+  (Fleet — connected / Fleet — reconnecting… / Direct device /
+  device name + code); `DeviceItem.Direct` is named "Direct device";
+  mesh IPs no longer render in rows or the identity card; error lines
+  are plain (defect 4d). Device CODES still display — they are the
+  product's own IDs (TeamViewer's ID equivalent), not addresses.
+- Audit dispositions for the remaining address surfaces (kept, by
+  design): Settings window + pairing wizard address fields (editors —
+  the operator types the value there); the wizard's fingerprint
+  verification code (the verification UX itself); Status tab
+  diagnostics (the designated diagnostics surface; it shows status,
+  no tokens); Tunnels tab targets (operator-entered data); audit logs
+  on agent and server (unchanged — addresses belong there).
+- Finding (severity: low, display-only): the fleet panel URL built by
+  "Open in browser" contains the fleet address — it is a navigation
+  action, not rendered text; left as is. No token or secret renders
+  anywhere in the App UI (grep-verified: the only remaining
+  `ex.Message` uses are the auth classifier, which inspects but never
+  displays, and the desktop clients' session-end reason, which is
+  sanitized in Core before display).
+- Proof: the Strings table contains no IP literal (grep), and every
+  UI-bound interpolation of host/URL was removed (grep over
+  `src/EsoAgent.App`).
+
+### Test seams — stated plainly
+The test project references Core/Linux/Server only, by design; the
+Avalonia App has no test seam. Everything decidable was therefore
+moved into Core and pinned there (session state machine, identity
+decision, self-exclusion, reason sanitizer, reconnect loop, state
+files — 42 new tests). The App-side wiring (which control shows what)
+is verified by build + code inspection only; the owner's live look
+remains the gate for it, as briefed.
