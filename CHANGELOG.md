@@ -4,6 +4,18 @@ All notable changes to EsoAgent are documented here. The project follows
 semantic versioning; the version lives in one place (`Directory.Build.props`)
 and is stamped on every surface — agent, fleet server, client, and app.
 
+## [1.3.2] — 2026-11-23
+
+The app behaves like a finished product now, the mesh actually carries traffic, and big updates survive slow links.
+
+- **The app shows your device code, always.** The code used to disappear whenever the fleet server was briefly unreachable — the app only trusted the server's list, so it concluded the device wasn't enrolled and offered to pair it again. The code is now read from the device itself before any network call, and a server outage shows "reconnecting", never a pairing prompt.
+- **The app connects by itself.** It connects on launch and reconnects on its own after the server restarts, the network drops, or the laptop wakes from sleep. The agent's reconnect loop can no longer die on an error, and it wakes immediately on network changes.
+- **Your own device is no longer offered as a connection target.** The Connect button now follows the real session — connecting, connected, disconnect — instead of sitting there unchanged. Desktop sessions get fullscreen (F11).
+- **State files can't silently corrupt anymore.** Every JSON state file is written atomically with a last-good backup; a torn or corrupt file falls back to the backup instead of resetting the device or wiping keys. A corrupt server store can no longer be cemented as empty state.
+- **No addresses in the interface.** The window title and device lists show names and plain statuses only — IP addresses live in the diagnostics logs, not on screen.
+- **The mesh now carries traffic.** The tunnel used to hold (handshakes survived the 30-second resync) but nothing flowed over it: the box could lose its mesh address across hibernation and no resync ever repaired it; the firewall plan admitted only the agent port; and the agent API didn't listen on the mesh address at all. The plumbing is now verified and repaired on every tick, the plan admits ICMP, the P2P port and return traffic, and the API binds the mesh address.
+- **Rollout uploads survive slow links.** A 70 MB package used to arrive stale — one signature for the whole upload, dead after two minutes. Packages now upload in 256 KiB chunks, each signed at send time, resuming from where the server already is, and the server verifies the whole-file hash before accepting.
+
 ## [1.3.1] — 2026-11-22
 
 One fix: the mesh tunnel no longer resets every 30 seconds.
